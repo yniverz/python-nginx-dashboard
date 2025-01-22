@@ -26,11 +26,20 @@ A lightweight wsgi web dashboard to configure and manage NginX Proxy configurati
 
 ## Configuration
 
+Create a `config.json` file in the root directory with the following structure:
+- `domain`: The domain name of the server.
+- `application_root`: The root web path of the application behind a possible proxy. Default is `/`.
+- `proxy_map_file`: The file to store the proxy map configurations. Default is `proxy_map.json`. Will be created if not found.
+- `username`: The username for web authentication.
+- `password`: The password for web authentication.
+- `cloudflare_token`: The Cloudflare API token to manage SRV records.
+- `allowed_api_keys`: A list of API keys to allow access to the API endpoints.
+
 ```json
 {
     "domain": "domain.tld",
     "application_root": "/",
-    "proxy_map_file": "proxy_map.json", // Default name
+    "proxy_map_file": "proxy_map.json",
     "username": "username",
     "password": "password",
     "cloudflare_token": "***cf-token***",
