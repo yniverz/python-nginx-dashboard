@@ -56,7 +56,7 @@ if __name__ == '__main__':
         domain=DOMAIN,
         ssl_cert_path='/etc/letsencrypt/live/' + DOMAIN + '/fullchain.pem',
         ssl_cert_key_path='/etc/letsencrypt/live/' + DOMAIN + '/privkey.pem',
-        json_path='proxy_map_new.json',
+        json_path=config['proxy_map_path'],
         cloudflare_token=config['cloudflare_token'],
     )
 
