@@ -54,7 +54,7 @@ Create a `config.json` file in the root directory with the following structure:
 
 Run the dashboard:
 ```sh
-python -m python-nginx-dashboard
+python -m core
 ```
 
 The web interface will be available at `http://127.0.0.1:8080`.
