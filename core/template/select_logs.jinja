@@ -1,0 +1,8 @@
+<html>
+    <head><title>Nginx Logs</title></head>
+    <body>
+        <h1>Nginx Logs</h1>
+        <button onclick="window.location.href='{{ application_root + url_for('logs') }}?type=access'">Access Logs</button>
+        <button onclick="window.location.href='{{ application_root + url_for('logs') }}?type=stream'">Stream Logs</button>
+    </body>
+</html>

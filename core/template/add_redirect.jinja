@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Add Redirect</h2>
+    <form method="POST" action="{{ application_root + url_for('add_redirect') }}">
+        <input type="text" name="subdomain" placeholder="Subdomain" required>
+        <input type="text" name="path" id="path" placeholder="Path" required>
+        <input type="text" name="route" placeholder="Route" required>
+        <input type="submit" value="Add Redirect">
+    </form>
+</div>
+</body>
+</html>

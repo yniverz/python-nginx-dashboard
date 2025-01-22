@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { max-width: 800px; margin: 50px auto; }
+        table { width: 100%; border-collapse: collapse; }
+        table, th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background-color: #f2f2f2; }
+        .btn { padding: 5px 10px; margin: 2px; cursor: pointer; }
+        .btn-delete { background-color: #f44336; color: white; }
+        .btn-toggle { background-color: #4CAF50; color: white; }
+        .btn-add { background-color: #2196F3; color: white; }
+        #pathOrPortContainer { display: inline-block; }
+        #pathOrPortContainer input { margin-right: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Add Route</h2>
+    <form method="POST" action="{{ application_root + url_for('add_route') }}">
+        NginX Endpoint:
+        <select name="server_type" id="serverType" required onchange="togglePathOrPort()">
+            <option value="http">HTTP</option>
+            <option value="stream">Stream</option>
+        </select>
+        <input type="text" name="subdomain" placeholder="Subdomain" required>
+        <div id="pathOrPortContainer">
+            <input type="text" name="path" id="path" placeholder="Path" required>
+        </div>
+        <br>
+        <div id="srvField" style="display:none;">
+            <input type="text" name="srv_record" placeholder="_minecraft._tcp">
+        </div>
+        Backend Path:
+        <select name="protocol" id="protocol" required>
+            <option value="http://">http://</option>
+            <option value="https://">https://</option>
+        </select>
+        <input type="text" name="backend_path" id="backend_path" placeholder="Backend Path">
+        <input type="hidden" id="targetsInput" name="targets">
+        <input type="submit" id="submitBtn" value="Add Route" disabled>
+    </form>
+
+    <h3>Targets</h3>
+    <table id="targetsTable">
+        <thead>
+            <tr>
+                <th>Server</th>
+                <th>Weight</th>
+                <th>Max Fails</th>
+                <th>Fail Timeout</th>
+                <th>Backup</th>
+                <th>Active</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <h4>Add New Target</h4>
+    <a>Must include a port!</a>
+    <div>
+        <input type="text" id="server" placeholder="Server" required>
+        <input type="number" id="weight" placeholder="Weight">
+        <input type="number" id="maxFails" placeholder="Max Fails">
+        <input type="number" id="failTimeout" placeholder="Fail Timeout">
+        <label>
+            <input type="checkbox" id="backup"> Backup
+        </label>
+        <label>
+            <input type="checkbox" id="active" checked> Active
+        </label>
+        <button type="button" class="btn btn-add" onclick="addTarget()">Add Target</button>
+    </div>
+</div>
+
+<script>
+    let targets = [];
+
+    function togglePathOrPort() {
+        const serverType = document.getElementById('serverType').value;
+        const container = document.getElementById('pathOrPortContainer');
+        const srvField = document.getElementById('srvField');
+        
+        if (serverType === 'stream') {
+            container.innerHTML = `
+                <input type="number" name="path" id="port" placeholder="Port" required>
+            `;
+            document.getElementById('protocol').disabled = true;
+            document.getElementById('backend_path').disabled = true;
+            srvField.style.display = 'block';
+        } else {
+            container.innerHTML = `
+                <input type="text" name="path" id="path" placeholder="Path" required>
+            `;
+            document.getElementById('protocol').disabled = false;
+            document.getElementById('backend_path').disabled = false;
+            srvField.style.display = 'none';
+        }
+    }
+
+    function addTarget() {
+        const server = document.getElementById('server').value;
+        const weight = document.getElementById('weight').value || null;
+        const maxFails = document.getElementById('maxFails').value || null;
+        const failTimeout = document.getElementById('failTimeout').value || null;
+        const backup = document.getElementById('backup').checked;
+        const active = document.getElementById('active').checked;
+
+        if (!server) {
+            alert("Server is required");
+            return;
+        }
+
+        const portRegex = /^([a-zA-Z0-9.-]+):(\d+)$/;
+        const portMatch = server.match(portRegex);
+        if (!portMatch) {
+            alert("Server must be in the format 'hostname:port' with no path afterwards.");
+            return;
+        }
+
+        if (targets.find(target => target.server === server)) {
+            alert("Server already exists");
+            return;
+        }
+
+        const target = {
+            server: server,
+            weight: weight ? parseInt(weight) : null,
+            max_fails: maxFails ? parseInt(maxFails) : null,
+            fail_timeout: failTimeout ? parseInt(failTimeout) : null,
+            backup: backup,
+            active: active
+        };
+
+        targets.push(target);
+        updateTable();
+        clearForm();
+        toggleSubmitButton();
+    }
+
+
+    function toggleSubmitButton() {
+        const hasValidTarget = targets.some(target => target.backup === false);
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = !hasValidTarget;
+    }
+
+    function updateTable() {
+        const tableBody = document.querySelector("#targetsTable tbody");
+        tableBody.innerHTML = "";
+
+        targets.forEach((target, index) => {
+            const row = document.createElement("tr");
+
+            row.innerHTML = `
+                <td>${target.server}</td>
+                <td>${target.weight !== null ? target.weight : ''}</td>
+                <td>${target.max_fails !== null ? target.max_fails : ''}</td>
+                <td>${target.fail_timeout !== null ? target.fail_timeout : ''}</td>
+                <td>${target.backup ? 'Yes' : 'No'}</td>
+                <td>${target.active ? 'Yes' : 'No'}</td>
+                <td>
+                    <button class="btn btn-delete" onclick="deleteTarget(${index})">Delete</button>
+                </td>
+            `;
+
+            tableBody.appendChild(row);
+        });
+
+        document.getElementById('targetsInput').value = JSON.stringify(targets);
+    }
+
+    function deleteTarget(index) {
+        targets.splice(index, 1);
+        updateTable();
+        toggleSubmitButton();
+    }
+
+    function clearForm() {
+        document.getElementById('server').value = '';
+        document.getElementById('weight').value = '';
+        document.getElementById('maxFails').value = '';
+        document.getElementById('failTimeout').value = '';
+        document.getElementById('backup').checked = false;
+        document.getElementById('active').checked = true;
+    }
+</script>
+</body>
+</html>
