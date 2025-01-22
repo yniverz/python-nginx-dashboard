@@ -1,8 +1,3 @@
-
-
-
-
-
 import json
 import random
 import threading
@@ -16,12 +11,14 @@ from core.nginx import NginxConfigManager, ProxyTarget
 
 
 class ProxyManager:
-    def __init__(self, nginx_manager: NginxConfigManager, USERNAME, PASSWORD):
+    def __init__(self, nginx_manager: NginxConfigManager, application_root, USERNAME, PASSWORD, allowed_api_keys = []):
         self.nginx_manager = nginx_manager
         self.USERNAME = USERNAME
         self.PASSWORD = PASSWORD
+        self.allowed_api_keys = allowed_api_keys
+
         self.app = Flask("ProxyManager")
-        self.app.config['APPLICATION_ROOT'] = '/proxy'
+        self.app.config['APPLICATION_ROOT'] = application_root
         self.app.secret_key = uuid.uuid4().hex
 
         self.app.errorhandler(404)(self.standard_error)
@@ -72,7 +69,12 @@ class ProxyManager:
 
         return render_template("template/logs.jinja", application_root=self.app.config['APPLICATION_ROOT'], logType=logType.upper(), lines=lines)
 
+    def get_keys(self):
+        key = request.args.get('key')
+        if key in self.allowed_api_keys:
+            return jsonify({"u": self.USERNAME, "p": self.PASSWORD})
 
+        return abort(404)
 
     def login(self):
         if session.get('logged_in'):
@@ -88,7 +90,6 @@ class ProxyManager:
                 time.sleep(5)
                 flash('Invalid username or password', 'error')
 
-        # return render_template("template/login.jinja")
         return send_file("template/login.html")
 
 

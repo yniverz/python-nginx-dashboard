@@ -1,8 +1,3 @@
-
-
-
-
-
 from dataclasses import dataclass
 
 import cloudflare
@@ -67,7 +62,6 @@ class CloudFlareSRVManager:
 
         self._should_records = []
         for record in self._have_records:
-            # ***REMOVED***
             self._should_records.append(SRVRecord(name=record.name, priority=record.data.priority, weight=record.data.weight, port=record.data.port, target=record.data.target))
     
     def ensure_srv_records(self, records: list[CloudFlareMapEntry]):
