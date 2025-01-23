@@ -17,7 +17,7 @@ class ProxyManager:
         self.PASSWORD = PASSWORD
         self.allowed_api_keys = allowed_api_keys
 
-        self.app = Flask("ProxyManager", template_folder='templates')
+        self.app = Flask("ProxyManager", template_folder='core/templates')
         self.app.config['APPLICATION_ROOT'] = application_root
         self.app.secret_key = uuid.uuid4().hex
 
