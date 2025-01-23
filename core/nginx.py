@@ -1,8 +1,7 @@
-from dataclasses import dataclass
 import json
 import os
 import subprocess
-
+from dataclasses import dataclass
 from core.cloudflare import CloudFlareMapEntry, CloudFlareSRVManager
 
 

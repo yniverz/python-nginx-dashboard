@@ -3,10 +3,8 @@ import random
 import threading
 import time
 import uuid
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
-import flask
 import waitress
-
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from core.nginx import NginxConfigManager, ProxyTarget
 
 

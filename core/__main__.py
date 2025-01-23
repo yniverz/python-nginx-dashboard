@@ -3,7 +3,6 @@ import json
 import threading
 import time
 import traceback
-
 import dns.resolver
 from core.nginx import NginxConfigManager
 from core.webserver import ProxyManager
