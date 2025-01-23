@@ -17,7 +17,7 @@ class ProxyManager:
         self.PASSWORD = PASSWORD
         self.allowed_api_keys = allowed_api_keys
 
-        self.app = Flask("ProxyManager")
+        self.app = Flask("ProxyManager", template_folder='templates')
         self.app.config['APPLICATION_ROOT'] = application_root
         self.app.secret_key = uuid.uuid4().hex
 
@@ -43,7 +43,7 @@ class ProxyManager:
     def standard_error(self, error):
         time.sleep(random.uniform(4, 6))
 
-        return send_file("core/template/404.html"), 404
+        return send_file("404.html"), 404
 
     def get_logs(self):
         if not (session.get('logged_in') or (request.args.get('key') and request.args.get('key') == "***REMOVED***")):
@@ -57,7 +57,7 @@ class ProxyManager:
         elif logType == "stream":
             logFile = "/var/log/nginx/stream.log"
         else:
-            return render_template("core/template/select_logs.jinja", application_root=self.app.config['APPLICATION_ROOT'])
+            return render_template("select_logs.jinja", application_root=self.app.config['APPLICATION_ROOT'])
 
         with open(logFile, "r") as f:
             lines = f.readlines()
@@ -67,7 +67,7 @@ class ProxyManager:
 
         lines = lines[::-1]
 
-        return render_template("core/template/logs.jinja", application_root=self.app.config['APPLICATION_ROOT'], logType=logType.upper(), lines=lines)
+        return render_template("logs.jinja", application_root=self.app.config['APPLICATION_ROOT'], logType=logType.upper(), lines=lines)
 
     def get_keys(self):
         key = request.args.get('key')
@@ -90,7 +90,7 @@ class ProxyManager:
                 time.sleep(5)
                 flash('Invalid username or password', 'error')
 
-        return send_file("core/template/login.html")
+        return send_file("login.html")
 
 
     def logout(self):
@@ -102,7 +102,7 @@ class ProxyManager:
         if not session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('login'))
 
-        return render_template("core/template/index.jinja", proxy_map=self.nginx_manager.proxy_map, domain=self.nginx_manager.domain, application_root=self.app.config['APPLICATION_ROOT'])
+        return render_template("index.jinja", proxy_map=self.nginx_manager.proxy_map, domain=self.nginx_manager.domain, application_root=self.app.config['APPLICATION_ROOT'])
 
 
 
@@ -137,7 +137,7 @@ class ProxyManager:
             flash('Route added successfully', 'success')
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
-        return render_template("core/template/add_route.jinja", application_root=self.app.config['APPLICATION_ROOT'])
+        return render_template("add_route.jinja", application_root=self.app.config['APPLICATION_ROOT'])
 
 
 
@@ -183,7 +183,7 @@ class ProxyManager:
         backend_path = data.get("path", "")
         srv_record = data.get("srv_record", "")
 
-        return render_template("core/template/edit_route.jinja", application_root=self.app.config['APPLICATION_ROOT'], proxy_map=self.nginx_manager.proxy_map, server_type=server_type, subdomain=subdomain, path=path, protocol=protocol, backend_path=backend_path, srv_record=srv_record)
+        return render_template("edit_route.jinja", application_root=self.app.config['APPLICATION_ROOT'], proxy_map=self.nginx_manager.proxy_map, server_type=server_type, subdomain=subdomain, path=path, protocol=protocol, backend_path=backend_path, srv_record=srv_record)
 
 
 
@@ -231,7 +231,7 @@ class ProxyManager:
             flash('Redirect added successfully', 'success')
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
-        return render_template("core/template/add_redirect.jinja", application_root=self.app.config['APPLICATION_ROOT'])
+        return render_template("add_redirect.jinja", application_root=self.app.config['APPLICATION_ROOT'])
 
 
 
@@ -246,4 +246,4 @@ class ProxyManager:
 
         threading.Thread(target=timer).start()
 
-        return render_template('core/template/reload.jinja', application_root=self.app.config['APPLICATION_ROOT'])
+        return render_template('reload.jinja', application_root=self.app.config['APPLICATION_ROOT'])
