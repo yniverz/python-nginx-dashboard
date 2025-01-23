@@ -3,7 +3,7 @@ import random
 import threading
 import time
 import uuid
-from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, render_template_string, request, send_file, session, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 import flask
 import waitress
 
@@ -43,7 +43,7 @@ class ProxyManager:
     def standard_error(self, error):
         time.sleep(random.uniform(4, 6))
 
-        return send_file("404.html"), 404
+        return render_template("404.html"), 404
 
     def get_logs(self):
         if not (session.get('logged_in') or (request.args.get('key') and request.args.get('key') == "***REMOVED***")):
@@ -90,7 +90,7 @@ class ProxyManager:
                 time.sleep(5)
                 flash('Invalid username or password', 'error')
 
-        return send_file("login.html")
+        return render_template("login.html")
 
 
     def logout(self):
