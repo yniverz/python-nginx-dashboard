@@ -60,7 +60,7 @@ if __name__ == '__main__':
         cloudflare_token=config['cloudflare_token'],
     )
 
-    thread = threading.Thread(target=dns_watcher, args=(config_manager,))
+    thread = threading.Thread(target=dns_watcher, args=(config_manager, DOMAIN))
     thread.start()
 
     proxy_manager = ProxyManager(
