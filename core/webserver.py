@@ -39,11 +39,10 @@ class ProxyManager:
         waitress.serve(self.app, host='127.0.0.1', port=8080)
 
     def standard_error(self, error):
-        print(error)
         time.sleep(random.uniform(4, 6))
 
         # return render_template("404.html"), 404
-        return render_template("status_code.jinja", status_code=404)
+        return render_template("status_code.jinja", status_code=404), 404
 
     def get_logs(self):
         if not (session.get('logged_in') or (request.args.get('key') and request.args.get('key') == "***REMOVED***")):
