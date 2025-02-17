@@ -23,7 +23,7 @@
         {% for subdomain in proxy_map["http"].keys() | map('reverse') | sort | map('reverse') %}
             {% for path, data in proxy_map["http"][subdomain].items() | sort %}
                 <tr>
-                    <td>{{ subdomain }}</td>
+                    <td style="text-align: right;">{{ subdomain }}</td>
                     <td>{{ path }}</td>
                     <td>
                     {% if data["type"] == "proxy" %}
