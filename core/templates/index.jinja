@@ -69,7 +69,7 @@
         {% for subdomain in proxy_map["stream"].keys() | map('reverse') | sort | map('reverse') %}
             {% for port, data in proxy_map["stream"][subdomain].items() | sort %}
                 <tr>
-                    <td>{{ subdomain }}</td>
+                    <td style="text-align: right;">{{ subdomain }}</td>
                     <td>{{ port }}</td>
                     <td>
                     {% if data["type"] == "proxy" %}
