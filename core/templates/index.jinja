@@ -20,7 +20,7 @@
     </form>
     <table>
         <tr><th>Subdomain</th><th>Path</th><th>Target</th><th>Status</th><th>Actions</th></tr>
-        {% for subdomain in proxy_map["http"].keys() | sort %}
+        {% for subdomain in proxy_map["http"].keys() | map('reverse') | sort | map('reverse') %}
             {% for path, data in proxy_map["http"][subdomain].items() | sort %}
                 <tr>
                     <td>{{ subdomain }}</td>
@@ -66,7 +66,7 @@
     <h3>Stream Routes</h3>
     <table>
         <tr><th>Subdomain</th><th>Port</th><th>Destination</th><th>SRV</th><th>Status</th><th>Actions</th></tr>
-        {% for subdomain in proxy_map["stream"].keys() | sort %}
+        {% for subdomain in proxy_map["stream"].keys() | map('reverse') | sort | map('reverse') %}
             {% for port, data in proxy_map["stream"][subdomain].items() | sort %}
                 <tr>
                     <td>{{ subdomain }}</td>
