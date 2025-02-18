@@ -29,7 +29,8 @@
                 <option value="http">HTTP</option>
             {% endif %}
         </select>
-        <input type="text" name="subdomain" placeholder="Subdomain" value="{{ subdomain }}" required disabled>
+        <input type="hidden" name="original_subdomain" value="{{ subdomain }}">
+        <input type="text" name="subdomain" placeholder="Subdomain" value="{{ subdomain }}" required>
         <div id="pathOrPortContainer">
             {% if server_type == "stream" %}
                 <input type="number" name="path" id="port" placeholder="Port" value="{{ path }}" required disabled>

@@ -157,7 +157,7 @@ class NginxConfigManager:
         self.save_to_json()
         self.generate_config()
 
-    def update_http_proxy_targets(self, subdomain: str, path: str, protocol: str, backend_path: str, targets: list[ProxyTarget]):
+    def update_http_proxy_targets(self, subdomain: str, path: str, protocol: str, backend_path: str, targets: list[ProxyTarget], new_subdomain: str = None):
         if subdomain not in self.proxy_map["http"]:
             return
         if path not in self.proxy_map["http"][subdomain]:
@@ -167,10 +167,13 @@ class NginxConfigManager:
         self.proxy_map["http"][subdomain][path]["protocol"] = protocol
         self.proxy_map["http"][subdomain][path]["path"] = backend_path
 
+        if new_subdomain is not None and new_subdomain != subdomain:
+            self.proxy_map["http"][new_subdomain] = self.proxy_map["http"].pop(subdomain)
+
         self.save_to_json()
         self.generate_config()
 
-    def update_stream_proxy_targets(self, subdomain: str, port: int, targets: list[ProxyTarget], srv_record: bool = None):
+    def update_stream_proxy_targets(self, subdomain: str, port: int, targets: list[ProxyTarget], srv_record: bool = None, new_subdomain: str = None):
         if subdomain not in self.proxy_map["stream"]:
             return
         if str(port) not in self.proxy_map["stream"][subdomain]:
@@ -181,6 +184,9 @@ class NginxConfigManager:
             self.proxy_map["stream"][subdomain][str(port)]["srv_record"] = srv_record
         elif "srv_record" in self.proxy_map["stream"][subdomain][str(port)]:
             del self.proxy_map["stream"][subdomain][str(port)]["srv_record"]
+
+        if new_subdomain is not None and new_subdomain != subdomain:
+            self.proxy_map["stream"][new_subdomain] = self.proxy_map["stream"].pop(subdomain)
 
         self.save_to_json()
         self.generate_config()

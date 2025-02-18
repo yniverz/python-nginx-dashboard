@@ -146,6 +146,7 @@ class ProxyManager:
 
         if request.method == 'POST':
             server_type = request.form['server_type']
+            original_subdomain = request.form['original_subdomain']
             subdomain = request.form['subdomain']
             path = request.form['path']
             protocol = request.form['protocol']
@@ -160,9 +161,9 @@ class ProxyManager:
                 newTargets.append(ProxyTarget(target['server'], target['weight'], target['max_fails'], target['fail_timeout'], target['backup'], target['active']))
 
             if server_type == "http":
-                self.nginx_manager.update_http_proxy_targets(subdomain.strip(), path.strip(), protocol, backend_path, newTargets)
+                self.nginx_manager.update_http_proxy_targets(original_subdomain.strip(), path.strip(), protocol, backend_path, newTargets, new_subdomain=subdomain)
             elif server_type == "stream":
-                self.nginx_manager.update_stream_proxy_targets(subdomain.strip(), int(path.strip()), newTargets, srv_record=srv_record)
+                self.nginx_manager.update_stream_proxy_targets(original_subdomain.strip(), int(path.strip()), newTargets, srv_record=srv_record, new_subdomain=subdomain)
 
             flash('Route updated successfully', 'success')
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
