@@ -50,7 +50,8 @@ class NginxConfigManager:
     def reload_nginx(self):
         self.generate_config()
 
-        subprocess.call(['systemctl', 'restart', 'nginx'])
+        # subprocess.call(['systemctl', 'restart', 'nginx'])
+        subprocess.call(['nginx', '-s', 'reload'])
 
         if len(self.cloudflare_srv_map) > 0:
             self.cf.ensure_srv_records(self.cloudflare_srv_map)
