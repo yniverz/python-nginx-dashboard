@@ -1,3 +1,5 @@
+[![License: NCPUL](https://img.shields.io/badge/license-NCPUL-blue.svg)](./LICENSE.md)
+
 # Python NginX Dashboard
 
 A lightweight wsgi web dashboard to configure and manage NginX Proxy configurations on the fly using Python.
