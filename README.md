@@ -13,7 +13,7 @@ A lightweight wsgi web dashboard to configure and manage NginX Proxy configurati
 
 1. Clone this repository:
    ```sh
-   git clone https://github.com/your-repo/python-nginx-dashboard
+   git clone https://github.com/yniverz/python-nginx-dashboard
    cd python-nginx-dashboard
    ```
 
