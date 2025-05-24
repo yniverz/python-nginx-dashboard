@@ -49,6 +49,7 @@ if __name__ == '__main__':
 
 
     DOMAIN = config['domain']
+    CHECK_DOMAIN = config['check_domain'] if 'check_domain' in config else DOMAIN
     config_manager = NginxConfigManager(
         config_path='/etc/nginx/conf.d/'+ DOMAIN + '.conf',
         stream_config_path='/etc/nginx/conf.stream.d/' + DOMAIN + '.conf',
@@ -59,7 +60,7 @@ if __name__ == '__main__':
         cloudflare_token=config['cloudflare_token'],
     )
 
-    thread = threading.Thread(target=dns_watcher, args=(config_manager, DOMAIN))
+    thread = threading.Thread(target=dns_watcher, args=(config_manager, CHECK_DOMAIN))
     thread.start()
 
     proxy_manager = ProxyManager(
