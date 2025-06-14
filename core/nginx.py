@@ -117,7 +117,7 @@ class NginxConfigManager:
 
         entry = self.get_stream_proxy_entry(targets)
         if srv_record:
-            entry["srv_record"] = True
+            entry["srv_record"] = srv_record
 
         self.proxy_map["stream"][subdomain][str(port)] = entry
         self.save_to_json()
@@ -367,7 +367,7 @@ server {{
                     continue
 
                 # Check if srv_record is set
-                srv_record = data.get("srv_record", False)
+                srv_record = data.get("srv_record", None)
                 if srv_record:
                     self.cloudflare_srv_map.append(CloudFlareMapEntry(subdomain, srv_record, int(port)))
 
