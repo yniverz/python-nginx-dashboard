@@ -49,7 +49,8 @@ class FRPConnection:
     localIP: str
     localPort: int
     remotePort: int
-    flags: list[str] = ["transport.useEncryption = true"]
+    # flags: list[str] = ["transport.useEncryption = true"]
+    flags: list[str] = dataclasses.field(default_factory=lambda: ["transport.useEncryption = true"])
 
     def generate_config_toml(self) -> str:
         config = f"""
@@ -69,7 +70,8 @@ remotePort = {self.remotePort}
 class FRPClient:
     id: str
     server: FRPServer
-    connections: list[FRPConnection] = []
+    # connections: list[FRPConnection] = []
+    connections: list[FRPConnection] = dataclasses.field(default_factory=list)
 
     def generate_config_toml(self) -> str:
         config = f"""
