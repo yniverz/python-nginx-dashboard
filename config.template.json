@@ -1,0 +1,14 @@
+{
+    "domain": "your.domain",
+    "check_domain": "dyndns.domain",
+    "application_root": "/proxy",
+    "proxy_map_file": "proxy_map.json",
+    "gateway_proxy_map_file": "gateway_proxy_map.json",
+    "username": "admin",
+    "password": "secret",
+    "cloudflare_token": "CloudFlareToken",
+    "allowed_api_keys": [
+        "SuperSecretKey1",
+        "SuperSecretKey2"
+    ]
+}

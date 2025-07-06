@@ -112,6 +112,82 @@
     <form method="POST" action="{{ application_root + url_for('reload_nginx') }}">
         <input type="submit" value="Reload Nginx">
     </form>
+    <br>
+    <h3>Gateway Proxy Routes</h3>
+    <form method="GET" action="{{ application_root + url_for('add_gateway_connection') }}">
+        <input type="submit" value="Add Gateway Connection">
+    </form>
+    <table>
+        <tr><th>Server</th><th>Client</th><th>Connection</th><th>Status</th><th>Actions</th></tr>
+        {% for connection in gateway_connection_list %}
+            <tr>
+                <td style="text-align: right;">{{ connection.server_id }}</td>
+                <td>{{ connection.client_id }}</td>
+                <td>{{ connection.connection_name }}</td>
+                <td>{{ "Active" }}</td>
+                <td>
+                    {# <div style="display: flex; gap: 10px; align-items: center;">
+                        <form method="GET" action="{{ application_root + url_for('edit_route') }}" style="display:inline;">
+                            <input type="hidden" name="server_type" value="stream">
+                            <input type="hidden" name="subdomain" value="{{ subdomain }}">
+                            <input type="hidden" name="path" value="{{ port }}">
+                            <input type="submit" class="btn btn-toggle" value="Edit">
+                        </form>
+                        <form method="POST" action="{{ application_root + url_for('toggle_route') }}" style="display:inline;">
+                            <input type="hidden" name="server_type" value="stream">
+                            <input type="hidden" name="subdomain" value="{{ subdomain }}">
+                            <input type="hidden" name="path" value="{{ port }}">
+                            <input type="submit" class="btn btn-toggle" value="{{ 'Deactivate' if data['active'] else 'Activate' }}">
+                        </form>
+                        <form method="POST" action="{{ application_root + url_for('delete_route') }}" style="display:inline;">
+                            <input type="hidden" name="server_type" value="stream">
+                            <input type="hidden" name="subdomain" value="{{ subdomain }}">
+                            <input type="hidden" name="path" value="{{ port }}">
+                            <input type="submit" class="btn btn-delete" value="Delete">
+                        </form>
+                    </div> #}
+                </td>
+            </tr>
+        {% endfor %}
+    </table><br>
+    <h3>Gateway Proxy Servers</h3>
+    <form method="GET" action="{{ application_root + url_for('add_gateway_server') }}">
+        <input type="submit" value="Add Gateway Server">
+    </form>
+    <table>
+        <tr><th>ID</th><th>Host</th><th>Bind Port</th><th>Webserver</th><th>Actions</th></tr>
+        {% for server in gateway_server_list %}
+            <tr>
+                <td style="text-align: right;">{{ server.id }}</td>
+                <td>{{ server.host }}</td>
+                <td>{{ server.bind_port }}</td>
+                <td>{{ "Active" if server.webserver else "N/A" }}</td>
+                <td>
+                    {# <div style="display: flex; gap: 10px; align-items: center;">
+                        <form method="GET" action="{{ application_root + url_for('edit_route') }}" style="display:inline;">
+                            <input type="hidden" name="server_type" value="stream">
+                            <input type="hidden" name="subdomain" value="{{ subdomain }}">
+                            <input type="hidden" name="path" value="{{ port }}">
+                            <input type="submit" class="btn btn-toggle" value="Edit">
+                        </form>
+                        <form method="POST" action="{{ application_root + url_for('toggle_route') }}" style="display:inline;">
+                            <input type="hidden" name="server_type" value="stream">
+                            <input type="hidden" name="subdomain" value="{{ subdomain }}">
+                            <input type="hidden" name="path" value="{{ port }}">
+                            <input type="submit" class="btn btn-toggle" value="{{ 'Deactivate' if data['active'] else 'Activate' }}">
+                        </form>
+                        <form method="POST" action="{{ application_root + url_for('delete_route') }}" style="display:inline;">
+                            <input type="hidden" name="server_type" value="stream">
+                            <input type="hidden" name="subdomain" value="{{ subdomain }}">
+                            <input type="hidden" name="path" value="{{ port }}">
+                            <input type="submit" class="btn btn-delete" value="Delete">
+                        </form>
+                    </div> #}
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+    <br>
     <a href="{{ application_root + url_for('logs') }}">Logs</a>
     <br>
     <br>

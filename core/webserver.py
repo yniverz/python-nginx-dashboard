@@ -5,12 +5,14 @@ import time
 import uuid
 import waitress
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from core.autofrp import AutoFRPManager, FRPSWebserver, FRPServer, FRPClient, FRPConnection
 from core.nginx import NginxConfigManager, ProxyTarget
 
 
 class ProxyManager:
-    def __init__(self, nginx_manager: NginxConfigManager, application_root, USERNAME, PASSWORD, allowed_api_keys = []):
+    def __init__(self, nginx_manager: NginxConfigManager, frp_manager: AutoFRPManager, application_root, USERNAME, PASSWORD, allowed_api_keys = []):
         self.nginx_manager = nginx_manager
+        self.frp_manager = frp_manager
         self.USERNAME = USERNAME
         self.PASSWORD = PASSWORD
         self.allowed_api_keys = allowed_api_keys
@@ -33,6 +35,9 @@ class ProxyManager:
         self.app.add_url_rule('/delete_route', 'delete_route', self.delete_route, methods=['POST'])
         self.app.add_url_rule('/add_redirect', 'add_redirect', self.add_redirect, methods=['GET', 'POST'])
         self.app.add_url_rule('/reload_nginx', 'reload_nginx', self.reload_nginx, methods=['POST'])
+
+        self.app.add_url_rule('/add_gateway_server', 'add_gateway_server', self.add_gateway_server, methods=['GET', 'POST'])
+        self.app.add_url_rule('/add_gateway_connection', 'add_gateway_connection', self.add_gateway_connection, methods=['GET', 'POST'])
 
     def run(self):
         print("Running server")
@@ -101,7 +106,7 @@ class ProxyManager:
         if not session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('login'))
 
-        return render_template("index.jinja", proxy_map=self.nginx_manager.proxy_map, domain=self.nginx_manager.domain, application_root=self.app.config['APPLICATION_ROOT'])
+        return render_template("index.jinja", proxy_map=self.nginx_manager.proxy_map, gateway_server_list=self.frp_manager.get_server_list(), gateway_connection_list=self.frp_manager.get_connection_list(), domain=self.nginx_manager.domain, application_root=self.app.config['APPLICATION_ROOT'])
 
 
 
@@ -247,3 +252,65 @@ class ProxyManager:
         threading.Thread(target=timer).start()
 
         return render_template('reload.jinja', application_root=self.app.config['APPLICATION_ROOT'])
+
+
+
+
+
+    def add_gateway_server(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        if request.method == 'POST':
+            webserver = None
+            if request.form.get("webserver_host", '').strip() != '':
+                webserver = FRPSWebserver(
+                    host=request.form['webserver_host'],
+                    port=int(request.form['webserver_port']),
+                    user=request.form.get('webserver_user', '').strip(),
+                    password=request.form.get('webserver_password', '').strip()
+                )
+
+            server = FRPServer(
+                id=request.form['id'],
+                host=request.form['host'],
+                bind_port=int(request.form['bind_port']),
+                auth_token=request.form['auth_token'],
+                webserver=webserver
+            )
+
+            self.frp_manager.add_server(server)
+
+            flash('Gateway server added successfully', 'success')
+            return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+
+        return render_template("add_gateway_server.jinja", application_root=self.app.config['APPLICATION_ROOT'])
+    
+    def add_gateway_connection(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        if request.method == 'POST':
+            client_id = request.form['client_id']
+            name = request.form['name']
+            type_ = request.form['type']
+            local_ip = request.form['local_ip']
+            local_port = int(request.form['local_port'])
+            remote_port = int(request.form['remote_port'])
+            flags = request.form.getlist('flags')
+
+            connection = FRPConnection(
+                name=name,
+                type=type_,
+                localIP=local_ip,
+                localPort=local_port,
+                remotePort=remote_port,
+                flags=flags
+            )
+
+            self.frp_manager.add_connection_to_client(client_id, connection)
+
+            flash('Gateway connection added successfully', 'success')
+            return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+
+        return render_template("add_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_server_list=self.frp_manager.get_server_list())

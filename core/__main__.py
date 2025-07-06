@@ -4,6 +4,7 @@ import threading
 import time
 import traceback
 import dns.resolver
+from core.autofrp import AutoFRPManager
 from core.nginx import NginxConfigManager
 from core.webserver import ProxyManager
 
@@ -50,7 +51,7 @@ if __name__ == '__main__':
 
     DOMAIN = config['domain']
     CHECK_DOMAIN = config['check_domain'] if 'check_domain' in config else DOMAIN
-    config_manager = NginxConfigManager(
+    nginx_manager = NginxConfigManager(
         config_path='/etc/nginx/conf.d/'+ DOMAIN + '.conf',
         stream_config_path='/etc/nginx/conf.stream.d/' + DOMAIN + '.conf',
         domain=DOMAIN,
@@ -60,11 +61,14 @@ if __name__ == '__main__':
         cloudflare_token=config['cloudflare_token'],
     )
 
-    thread = threading.Thread(target=dns_watcher, args=(config_manager, CHECK_DOMAIN))
+    frp_manager = AutoFRPManager(config['gateway_proxy_map_file'])
+
+    thread = threading.Thread(target=dns_watcher, args=(nginx_manager, CHECK_DOMAIN))
     thread.start()
 
     proxy_manager = ProxyManager(
-        config_manager, 
+        nginx_manager,
+        frp_manager,
         config["application_root"] if "application_root" in config else "/",
         config["username"], 
         config["password"], 
