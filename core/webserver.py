@@ -37,6 +37,7 @@ class ProxyManager:
         self.app.add_url_rule('/reload_nginx', 'reload_nginx', self.reload_nginx, methods=['POST'])
 
         self.app.add_url_rule('/add_gateway_server', 'add_gateway_server', self.add_gateway_server, methods=['GET', 'POST'])
+        self.app.add_url_rule('/add_gateway_client', 'add_gateway_client', self.add_gateway_client, methods=['GET', 'POST'])
         self.app.add_url_rule('/add_gateway_connection', 'add_gateway_connection', self.add_gateway_connection, methods=['GET', 'POST'])
 
     def run(self):
@@ -291,6 +292,26 @@ class ProxyManager:
 
         return render_template("add_gateway_server.jinja", application_root=self.app.config['APPLICATION_ROOT'])
     
+    def add_gateway_client(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        if request.method == 'POST':
+            client = FRPClient(
+                id=request.form['client_id'],
+                server=self.frp_manager.get_server_by_id(request.form['server_id'])
+            )
+
+            try:
+                self.frp_manager.add_client(client)
+                flash('Gateway client added successfully', 'success')
+            except Exception as e:
+                flash(f'Error adding gateway client: {str(e)}', 'error')
+
+            return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+
+        return render_template("add_gateway_client.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_server_list=self.frp_manager.get_server_list())
+
     def add_gateway_connection(self):
         if not session.get('logged_in'):
             return abort(404)
@@ -313,9 +334,12 @@ class ProxyManager:
                 flags=flags
             )
 
-            self.frp_manager.add_connection_to_client(client_id, connection)
+            try:
+                self.frp_manager.add_connection_to_client(client_id, connection)
+                flash('Gateway connection added successfully', 'success')
+            except Exception as e:
+                flash(f'Error adding gateway connection: {str(e)}', 'error')
 
-            flash('Gateway connection added successfully', 'success')
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
-        return render_template("add_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_server_list=self.frp_manager.get_server_list())
+        return render_template("add_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_client_list=self.frp_manager.get_client_list())

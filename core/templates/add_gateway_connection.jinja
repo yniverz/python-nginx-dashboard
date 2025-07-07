@@ -20,11 +20,11 @@
     <!-- this POSTs to your Flask route -->
     <form method="POST" action="{{ application_root + url_for('add_gateway_connection') }}">
 
-        <!-- pick which gateway client (server) the connection belongs to -->
-        <label for="client_id">Gateway Server</label>
+        <!-- pick which gateway client the connection belongs to -->
+        <label for="client_id">Gateway Client</label>
         <select name="client_id" id="client_id" required>
-            {% for server in gateway_server_list %}
-                <option value="{{ server.id }}">{{ server.name or server.id }}</option>
+            {% for client in gateway_client_list %}
+                <option value="{{ client.id }}">{{ client.id }}</option>
             {% endfor %}
         </select>
 

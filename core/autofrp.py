@@ -191,6 +191,15 @@ class AutoFRPManager:
     def get_server_list(self) -> list[dict]:
         return [s.__dict__ for s in self.datastore.servers]
     
+    def get_client_list(self) -> list[dict]:
+        return [c.__dict__ for c in self.datastore.clients]
+    
+    def get_server_by_id(self, server_id: str) -> FRPServer:
+        for server in self.datastore.servers:
+            if server.id == server_id:
+                return server
+        raise ValueError(f"Server with ID {server_id} not found.")
+    
     def get_connection_list(self) -> list[dict]:
         result = []
         for client in self.datastore.clients:

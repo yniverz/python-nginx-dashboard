@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { max-width: 640px; margin: 0 auto; }
+        input, select, fieldset { display: block; width: 100%; margin: 0.5rem 0; padding: 0.4rem; }
+        fieldset { border: 1px solid #ccc; padding: 0.75rem; }
+        legend { font-weight: bold; }
+        input[type="submit"] { width: auto; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Add Gateway Client</h2>
+
+    <!-- this POSTs to your Flask route -->
+    <form method="POST" action="{{ application_root + url_for('add_gateway_client') }}">
+
+        <!-- pick which gateway server the connection belongs to -->
+        <label for="server_id">Gateway Server</label>
+        <select name="server_id" id="server_id" required>
+            {% for server in gateway_server_list %}
+                <option value="{{ server.id }}">{{ server.id }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="text"     name="client_id"        placeholder="Client Name (UUID)" required>
+
+        <input type="submit" value="Add Gateway Client">
+    </form>
+</div>
+</body>
+</html>
