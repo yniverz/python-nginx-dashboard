@@ -39,6 +39,12 @@ class ProxyManager:
         self.app.add_url_rule('/add_gateway_server', 'add_gateway_server', self.add_gateway_server, methods=['GET', 'POST'])
         self.app.add_url_rule('/add_gateway_client', 'add_gateway_client', self.add_gateway_client, methods=['GET', 'POST'])
         self.app.add_url_rule('/add_gateway_connection', 'add_gateway_connection', self.add_gateway_connection, methods=['GET', 'POST'])
+        self.app.add_url_rule('/edit_gateway_server', 'edit_gateway_server', self.edit_gateway_server, methods=['GET', 'POST'])
+        self.app.add_url_rule('/edit_gateway_client', 'edit_gateway_client', self.edit_gateway_client, methods=['GET', 'POST'])
+        self.app.add_url_rule('/edit_gateway_connection', 'edit_gateway_connection', self.edit_gateway_connection, methods=['GET', 'POST'])
+        self.app.add_url_rule('/delete_gateway_server', 'delete_gateway_server', self.delete_gateway_server, methods=['POST'])
+        self.app.add_url_rule('/delete_gateway_client', 'delete_gateway_client', self.delete_gateway_client, methods=['POST'])
+        self.app.add_url_rule('/delete_gateway_connection', 'delete_gateway_connection', self.delete_gateway_connection, methods=['POST'])
 
     def run(self):
         print("Running server")
