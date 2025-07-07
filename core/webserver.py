@@ -262,6 +262,7 @@ class ProxyManager:
             return abort(404)
 
         if request.method == 'POST':
+            print("lol")
             webserver = None
             if request.form.get("webserver_host", '').strip() != '':
                 webserver = FRPSWebserver(
