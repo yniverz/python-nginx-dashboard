@@ -193,3 +193,10 @@
     <br>
     <a href="{{ application_root + url_for('logout') }}">Logout</a>
 </div>
+
+<script>
+    const flashMessages = {{ get_flashed_messages()|tojson }};
+    flashMessages.forEach(msg => {
+        alert(msg);
+    });
+</script>
