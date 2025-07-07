@@ -1,3 +1,4 @@
+from datetime import timedelta
 import json
 import random
 import threading
@@ -7,7 +8,8 @@ import waitress
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from core.autofrp import AutoFRPManager, FRPSWebserver, FRPServer, FRPClient, FRPConnection
 from core.nginx import NginxConfigManager, ProxyTarget
-
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 class ProxyManager:
     def __init__(self, nginx_manager: NginxConfigManager, frp_manager: AutoFRPManager, application_root, USERNAME, PASSWORD, allowed_api_keys = []):
@@ -19,7 +21,20 @@ class ProxyManager:
 
         self.app = Flask("ProxyManager", template_folder='core/templates')
         self.app.config['APPLICATION_ROOT'] = application_root
+        self.app.config.update(
+            SESSION_COOKIE_SECURE=True,       # only sent over HTTPS
+            SESSION_COOKIE_HTTPONLY=True,     # JS can’t read
+            SESSION_COOKIE_SAMESITE="Strict", # no cross-site requests
+            PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
+        )
         self.app.secret_key = uuid.uuid4().hex
+
+        self.limiter = Limiter(
+            key_func=get_remote_address,
+            storage_uri="memory://localhost:6379",   # or "memory://"
+            default_limits=[]
+        )
+        self.limiter.init_app(self.app)
 
         self.app.errorhandler(404)(self.standard_error)
         self.app.errorhandler(405)(self.standard_error)
@@ -61,7 +76,7 @@ class ProxyManager:
         return render_template("status_code.jinja", status_code=404), 404
 
     def get_logs(self):
-        if not (session.get('logged_in') or (request.args.get('key') and request.args.get('key') == "***REMOVED***")):
+        if not session.get('logged_in'):
             return abort(404)
 
         key_set = request.args.get('key') != None
@@ -84,12 +99,12 @@ class ProxyManager:
 
         return render_template("logs.jinja", application_root=self.app.config['APPLICATION_ROOT'], logType=logType.upper(), lines=lines)
 
-    def get_keys(self):
-        key = request.args.get('key')
-        if key in self.allowed_api_keys:
-            return jsonify({"u": self.USERNAME, "p": self.PASSWORD})
+    # def get_keys(self):
+    #     key = request.args.get('key')
+    #     if key in self.allowed_api_keys:
+    #         return jsonify({"u": self.USERNAME, "p": self.PASSWORD})
 
-        return abort(404)
+    #     return abort(404)
 
     def login(self):
         if session.get('logged_in'):
@@ -132,8 +147,6 @@ class ProxyManager:
     def add_route(self):
         if not session.get('logged_in'):
             return abort(404)
-
-        print(request.form)
 
         if request.method == 'POST':
             server_type = request.form['server_type']
@@ -508,11 +521,14 @@ class ProxyManager:
     
     def get_gateway_server_config(self, server_id):
         token = request.args.get('token')
-        if not token or token not in self.allowed_api_keys:
+        if not token:
             return abort(404)
 
         server = self.frp_manager.get_server_by_id(server_id)
         if not server:
+            return abort(404)
+        
+        if not token == server.auth_token:
             return abort(404)
         
         server.was_requested()
@@ -521,13 +537,16 @@ class ProxyManager:
 
     def get_gateway_client_config(self, client_id):
         token = request.args.get('token')
-        if not token or token not in self.allowed_api_keys:
+        if not token:
             return abort(404)
 
         client = self.frp_manager.get_client_by_id(client_id)
         if not client:
             return abort(404)
-        
+
+        if not token == client.server.auth_token:
+            return abort(404)
+
         client.was_requested()
 
         return client.generate_config_toml()
