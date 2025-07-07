@@ -262,7 +262,6 @@ class ProxyManager:
             return abort(404)
 
         if request.method == 'POST':
-            print("lol")
             webserver = None
             if request.form.get("webserver_host", '').strip() != '':
                 webserver = FRPSWebserver(
@@ -280,9 +279,13 @@ class ProxyManager:
                 webserver=webserver
             )
 
-            self.frp_manager.add_server(server)
+            try:
+                self.frp_manager.add_server(server)
 
-            flash('Gateway server added successfully', 'success')
+                flash('Gateway server added successfully', 'success')
+            except Exception as e:
+                flash(f'Error adding gateway server: {str(e)}', 'error')
+                
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
         return render_template("add_gateway_server.jinja", application_root=self.app.config['APPLICATION_ROOT'])

@@ -158,6 +158,8 @@ class FRPManagerDataStore:
             self.clients = []
 
     def add_server(self, server: FRPServer):
+        if any(s.id == server.id for s in self.servers):
+            raise ValueError(f"Server with ID {server.id} already exists.")
         self.servers.append(server)
 
     def add_client(self, client: FRPClient):
