@@ -67,8 +67,7 @@ class ProxyManager:
 
     def run(self):
         print("Running server")
-        # waitress.serve(self.app, host='127.0.0.1', port=8080)
-        self.app.run(host='127.0.0.1', port=8080, debug=True, threaded=True, use_reloader=False)
+        waitress.serve(self.app, host='127.0.0.1', port=8080)
 
     def standard_error(self, error):
         time.sleep(random.uniform(4, 6))
