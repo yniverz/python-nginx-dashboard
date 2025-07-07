@@ -14,29 +14,36 @@ def get_dns(domain: str):
     answers = dns.resolver.resolve(domain,'A')
     return answers[0].address
 
-def dns_watcher(config_manager: NginxConfigManager, domain: str):
-    domain = domain
-    ip = get_dns(domain)
-    print(f'Home IP: {ip}')
+def dns_watcher(config_manager: NginxConfigManager, domains: list[str]):
+    domain_store = {}
+
+    for domain in domains:
+        ip = get_dns(domain)
+        domain_store[domain] = ip
+        print(f'Initial IP for {domain}: {ip}')
 
     time.sleep(60)
 
     while True:
         try:
-            new_ip = get_dns(domain)
-            if new_ip != ip:
-                print(f'New IP: {new_ip}')
-                ip = new_ip
+            needs_reload = False
+            for domain in domains:
+                new_ip = get_dns(domain)
+                if new_ip != domain_store[domain]:
+                    print(f'New IP for {domain}: {new_ip}')
+                    domain_store[domain] = new_ip
+                    needs_reload = True
 
-                try:
+            try:
+                if needs_reload:
                     config_manager.reload_nginx()
-                except Exception as e:
-                    print(traceback.format_exc())
+            except Exception as e:
+                print(traceback.format_exc())
 
         except Exception as e:
             print(e)
 
-        time.sleep(60)
+        time.sleep(300)
 
 
 
@@ -50,7 +57,7 @@ if __name__ == '__main__':
 
 
     DOMAIN = config['domain']
-    CHECK_DOMAIN = config['check_domain'] if 'check_domain' in config else DOMAIN
+    CHECK_DOMAINS = config['check_domains'] if 'check_domains' in config else []
     nginx_manager = NginxConfigManager(
         config_path='/etc/nginx/conf.d/'+ DOMAIN + '.conf',
         stream_config_path='/etc/nginx/conf.stream.d/' + DOMAIN + '.conf',
@@ -63,8 +70,9 @@ if __name__ == '__main__':
 
     frp_manager = AutoFRPManager(config['gateway_proxy_map_file'])
 
-    thread = threading.Thread(target=dns_watcher, args=(nginx_manager, CHECK_DOMAIN))
-    thread.start()
+    if CHECK_DOMAINS:
+        thread = threading.Thread(target=dns_watcher, args=(nginx_manager, CHECK_DOMAINS))
+        thread.start()
 
     proxy_manager = ProxyManager(
         nginx_manager,
