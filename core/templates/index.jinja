@@ -197,6 +197,19 @@
 <script>
     const flashMessages = {{ get_flashed_messages()|tojson }};
     flashMessages.forEach(msg => {
-        alert(msg);
+        // generate a simple popup message
+        const popup = document.createElement('div');
+        popup.style.position = 'fixed';
+        popup.style.top = '10px';
+        popup.style.right = '10px';
+        popup.style.backgroundColor = '#f0f0f0';
+        popup.style.border = '1px solid #ccc';
+        popup.style.padding = '10px';
+        popup.style.zIndex = '1000';
+        popup.textContent = msg;
+        document.body.appendChild(popup);
+        setTimeout(() => {
+            popup.remove();
+        }, 3000); // remove after 3 seconds
     });
 </script>
