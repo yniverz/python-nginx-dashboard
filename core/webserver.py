@@ -446,7 +446,7 @@ class ProxyManager:
 
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
-        return render_template("add_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_client_list=self.frp_manager.get_client_list())
+        return render_template("add_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_client_list=self.frp_manager.get_client_list(), all_flags=GATEWAY_FLAGS.get_all_flags())
     
     def edit_gateway_connection(self):
         if not session.get('logged_in'):
@@ -474,7 +474,7 @@ class ProxyManager:
 
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
-        return render_template("edit_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], client_id=client_id, connection=connection)
+        return render_template("edit_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], client_id=client_id, connection=connection, all_flags=GATEWAY_FLAGS.get_all_flags())
 
     def delete_gateway_connection(self):
         if not session.get('logged_in'):
@@ -527,3 +527,14 @@ class ProxyManager:
             return abort(404)
 
         return client.generate_config_toml()
+    
+class GATEWAY_FLAGS:
+    all_flags = ['transport.useEncryption = true',]
+
+    @classmethod
+    def get_all_flags(cls):
+        return cls.all_flags
+
+    @classmethod
+    def is_valid_flag(cls, flag):
+        return flag in cls.all_flags

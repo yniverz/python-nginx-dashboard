@@ -46,9 +46,15 @@
         <!-- optional connection flags (multiple allowed) -->
         <fieldset>
             <legend>Flags</legend>
-            <label><input type="checkbox" name="flags" value="encryption"> Encryption</label>
+            {# <label><input type="checkbox" name="flags" value="encryption"> Encryption</label>
             <label><input type="checkbox" name="flags" value="compression"> Compression</label>
-            <label><input type="checkbox" name="flags" value="udp2raw"> UDP2RAW</label>
+            <label><input type="checkbox" name="flags" value="udp2raw"> UDP2RAW</label> #}
+            {% for f in all_flags %}
+                <label>
+                    <input type="checkbox" name="flags" value="{{ f }}">
+                    {{ f|capitalize }}
+                </label>
+            {% endfor %}
         </fieldset>
 
         <input type="submit" value="Add Gateway Connection">

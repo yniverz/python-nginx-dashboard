@@ -47,7 +47,6 @@
 
         <fieldset>
             <legend>Flags</legend>
-            {% set all_flags = ['encryption','compression','udp2raw'] %}
             {% for f in all_flags %}
                 <label>
                     <input type="checkbox" name="flags" value="{{ f }}"
