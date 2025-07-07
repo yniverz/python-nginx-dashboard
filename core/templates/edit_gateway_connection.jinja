@@ -54,6 +54,14 @@
                     {{ f|capitalize }}
                 </label>
             {% endfor %}
+            {% for f in connection.flags %}
+                {% if f not in all_flags %}
+                    <label>
+                        <input type="checkbox" name="flags" value="{{ f }}" checked>
+                        {{ f|capitalize }}
+                    </label>
+                {% endif %}
+            {% endfor %}
         </fieldset>
 
         <input type="submit" value="Update Gateway Connection">
