@@ -24,7 +24,6 @@ class ProxyManager:
             application_root=application_root,
             SESSION_COOKIE_SECURE=True,       # only sent over HTTPS
             SESSION_COOKIE_HTTPONLY=True,     # JS can’t read
-            SESSION_COOKIE_SAMESITE="Strict", # no cross-site requests
             PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
         )
         self.app.secret_key = uuid.uuid4().hex
