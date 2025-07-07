@@ -47,6 +47,9 @@ class ProxyManager:
         self.app.add_url_rule('/delete_gateway_connection', 'delete_gateway_connection', self.delete_gateway_connection, methods=['POST'])
         self.app.add_url_rule('/toggle_gateway_connection', 'toggle_gateway_connection', self.toggle_gateway_connection, methods=['POST'])
 
+        self.app.add_url_rule('/api/gateway/server/<server_id>', 'gateway_server_config', self.get_gateway_server_config, methods=['GET'])
+        self.app.add_url_rule('/api/gateway/client/<client_id>', 'gateway_client_config', self.get_gateway_client_config, methods=['GET'])
+
     def run(self):
         print("Running server")
         waitress.serve(self.app, host='127.0.0.1', port=8080)
@@ -502,3 +505,25 @@ class ProxyManager:
             flash(f'Error toggling gateway connection: {str(e)}', 'error')
 
         return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+    
+    def get_gateway_server_config(self, server_id):
+        token = request.args.get('token')
+        if not session.get('logged_in') and (not token or token not in self.allowed_api_keys):
+            return abort(404)
+
+        server = self.frp_manager.get_server_by_id(server_id)
+        if not server:
+            return abort(404)
+
+        return server.generate_config_toml()
+
+    def get_gateway_client_config(self, client_id):
+        token = request.args.get('token')
+        if not session.get('logged_in') and (not token or token not in self.allowed_api_keys):
+            return abort(404)
+
+        client = self.frp_manager.get_client_by_id(client_id)
+        if not client:
+            return abort(404)
+
+        return client.generate_config_toml()
