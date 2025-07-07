@@ -285,3 +285,13 @@ class AutoFRPManager:
                 self.save_config()
                 return
         raise ValueError(f"Client with ID {client_id} not found.")
+    
+    def toggle_connection(self, client_id: str, connection_name: str):
+        for client in self.datastore.clients:
+            if client.id == client_id:
+                for connection in client.connections:
+                    if connection.name == connection_name:
+                        connection.active = not connection.active
+                        self.save_config()
+                        return
+        raise ValueError(f"Connection with name {connection_name} not found in client {client_id}.")

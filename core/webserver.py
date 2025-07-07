@@ -45,6 +45,7 @@ class ProxyManager:
         self.app.add_url_rule('/delete_gateway_server', 'delete_gateway_server', self.delete_gateway_server, methods=['POST'])
         self.app.add_url_rule('/delete_gateway_client', 'delete_gateway_client', self.delete_gateway_client, methods=['POST'])
         self.app.add_url_rule('/delete_gateway_connection', 'delete_gateway_connection', self.delete_gateway_connection, methods=['POST'])
+        self.app.add_url_rule('/toggle_gateway_connection', 'toggle_gateway_connection', self.toggle_gateway_connection, methods=['POST'])
 
     def run(self):
         print("Running server")
@@ -484,5 +485,20 @@ class ProxyManager:
             flash('Gateway connection deleted successfully', 'success')
         except Exception as e:
             flash(f'Error deleting gateway connection: {str(e)}', 'error')
+
+        return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+    
+    def toggle_gateway_connection(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        client_id = request.form['client_id']
+        connection_name = request.form['connection_name']
+
+        try:
+            self.frp_manager.toggle_connection(client_id, connection_name)
+            flash('Gateway connection toggled successfully', 'success')
+        except Exception as e:
+            flash(f'Error toggling gateway connection: {str(e)}', 'error')
 
         return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
