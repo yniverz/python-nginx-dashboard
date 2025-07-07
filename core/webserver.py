@@ -507,6 +507,7 @@ class ProxyManager:
         return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
     
     def get_gateway_server_config(self, server_id):
+        print(request.args)
         token = request.args.get('token')
         if not token or token not in self.allowed_api_keys:
             return abort(404)
