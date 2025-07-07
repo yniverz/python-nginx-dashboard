@@ -262,24 +262,25 @@ class ProxyManager:
             return abort(404)
 
         if request.method == 'POST':
-            try:
-                webserver = None
-                if request.form.get("webserver_host", '').strip() != '':
-                    webserver = FRPSWebserver(
-                        host=request.form['webserver_host'],
-                        port=int(request.form['webserver_port']),
-                        user=request.form.get('webserver_user', '').strip(),
-                        password=request.form.get('webserver_password', '').strip()
-                    )
-
-                server = FRPServer(
-                    id=request.form['id'],
-                    host=request.form['host'],
-                    bind_port=int(request.form['bind_port']),
-                    auth_token=request.form['auth_token'],
-                    webserver=webserver
+            form_dict = request.form.to_dict()
+            webserver = None
+            if form_dict.get("webserver_host", '').strip() != '':
+                webserver = FRPSWebserver(
+                    host=form_dict['webserver_host'],
+                    port=int(form_dict['webserver_port']),
+                    user=form_dict.get('webserver_user', '').strip(),
+                    password=form_dict.get('webserver_password', '').strip()
                 )
 
+            server = FRPServer(
+                id=form_dict['id'],
+                host=form_dict['host'],
+                bind_port=int(form_dict['bind_port']),
+                auth_token=form_dict['auth_token'],
+                webserver=webserver
+            )
+
+            try:
                 self.frp_manager.add_server(server)
 
                 flash('Gateway server added successfully', 'success')
