@@ -196,6 +196,26 @@ class AutoFRPManager:
     def get_client_list(self) -> list[dict]:
         return [c.__dict__ for c in self.datastore.clients]
     
+    def get_connection_list(self) -> list[dict]:
+        result = []
+        for client in self.datastore.clients:
+            for connection in client.connections:
+                result.append({
+                    "server_id": client.server.id,
+                    "client_id": client.id,
+                    "connection_name": connection.name,
+                    "type": connection.type,
+                    "localIP": connection.localIP,
+                    "localPort": connection.localPort,
+                    "remotePort": connection.remotePort,
+                    "flags": connection.flags,
+                    "active": connection.active
+                })
+
+        result.sort(key=lambda x: (x['server_id'], x['client_id'], x['connection_name']))
+        return result
+
+    
     def get_server_by_id(self, server_id: str) -> FRPServer:
         for server in self.datastore.servers:
             if server.id == server_id:
@@ -216,23 +236,6 @@ class AutoFRPManager:
                         return connection
         raise ValueError(f"Connection with name {connection_name} not found in client {client_id}.")
     
-    def get_connection_list(self) -> list[dict]:
-        result = []
-        for client in self.datastore.clients:
-            for connection in client.connections:
-                result.append({
-                    "server_id": client.server.id,
-                    "client_id": client.id,
-                    "connection_name": connection.name,
-                    "type": connection.type,
-                    "localIP": connection.localIP,
-                    "localPort": connection.localPort,
-                    "remotePort": connection.remotePort,
-                    "flags": connection.flags
-                })
-
-        result.sort(key=lambda x: (x['server_id'], x['client_id'], x['connection_name']))
-        return result
 
 
     def add_server(self, server: FRPServer):

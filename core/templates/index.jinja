@@ -124,7 +124,7 @@
                 <td style="text-align: right;">{{ connection.server_id }}</td>
                 <td>{{ connection.client_id }}</td>
                 <td>{{ connection.connection_name }}</td>
-                <td>{{ "Active" if connection.active else "Inactive" }}{{connection.active}}</td>
+                <td>{{ "Active" if connection.active else "Inactive" }}</td>
                 <td>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <form method="GET" action="{{ application_root + url_for('edit_gateway_connection') }}" style="display:inline;">
