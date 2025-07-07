@@ -42,7 +42,7 @@ class ProxyManager:
         self.app.add_url_rule('/', 'index', self.index)
         self.app.add_url_rule('/login', 'login', self.login, methods=['GET', 'POST'])
         self.app.add_url_rule('/logout', 'logout', self.logout)
-        self.app.add_url_rule('/keys', 'keys', self.get_keys, methods=['GET'])
+        # self.app.add_url_rule('/keys', 'keys', self.get_keys, methods=['GET'])
         self.app.add_url_rule('/logs', 'logs', self.get_logs, methods=['GET'])
         self.app.add_url_rule('/add_route', 'add_route', self.add_route, methods=['GET', 'POST'])
         self.app.add_url_rule('/edit_route', 'edit_route', self.edit_route, methods=['GET', 'POST'])
