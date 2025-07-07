@@ -135,7 +135,7 @@
                         <form method="POST" action="{{ application_root + url_for('toggle_gateway_connection') }}" style="display:inline;">
                             <input type="hidden" name="client_id" value="{{ connection.client_id }}">
                             <input type="hidden" name="connection_name" value="{{ connection.connection_name }}">
-                            <input type="submit" class="btn btn-toggle" value="{{ 'Deactivate' if data['active'] else 'Activate' }}">
+                            <input type="submit" class="btn btn-toggle" value="{{ 'Deactivate' if connection.active else 'Activate' }}">
                         </form>
                         <form method="POST" action="{{ application_root + url_for('delete_gateway_connection') }}" style="display:inline;">
                             <input type="hidden" name="client_id" value="{{ connection.client_id }}">
