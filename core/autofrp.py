@@ -31,6 +31,9 @@ class FRPServer:
     webserver: FRPSWebserver = None
     last_request: int = 0
 
+    def __post_init__(self):
+        self.last_request = 0
+
     def generate_config_toml(self) -> str:
         config = f"""
 bindPort = {self.bind_port}
@@ -85,6 +88,9 @@ class FRPClient:
     server: FRPServer
     connections: list[FRPConnection] = dataclasses.field(default_factory=list)
     last_request: int = 0
+
+    def __post_init__(self):
+        self.last_request = 0
 
     def generate_config_toml(self) -> str:
         config = f"""
