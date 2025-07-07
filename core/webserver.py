@@ -282,9 +282,9 @@ class ProxyManager:
         if request.method == 'POST':
             form_dict = request.form.to_dict()
             webserver = None
-            if form_dict.get("webserver_host", '').strip() != '':
+            if form_dict.get("webserver_addr", '').strip() != '':
                 webserver = FRPSWebserver(
-                    host=form_dict['webserver_host'],
+                    host=form_dict['webserver_addr'],
                     port=int(form_dict['webserver_port']),
                     user=form_dict.get('webserver_user', '').strip(),
                     password=form_dict.get('webserver_password', '').strip()

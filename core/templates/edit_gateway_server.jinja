@@ -34,9 +34,9 @@
                value="{{ server.auth_token }}" required>
 
         {# web-UI fields – pre-fill if the server already has a webserver block #}
-        <input type="text" name="webserver_host"
-               placeholder="Webserver Host (optional)"
-               value="{{ server.webserver.host if server.webserver else '' }}">
+        <input type="text" name="webserver_addr"
+               placeholder="Webserver Address (optional)"
+               value="{{ server.webserver.addr if server.webserver else '' }}">
         <input type="number" name="webserver_port"
                placeholder="Webserver Port (optional)"
                value="{{ server.webserver.port if server.webserver else '' }}">
@@ -52,8 +52,8 @@
 </div>
 
 <script>
-/* Make webserver fields required if host is filled (same logic as “add” page) */
-const webHost = document.querySelector('input[name="webserver_host"]');
+/* Make webserver fields required if addr is filled (same logic as “add” page) */
+const webAddr = document.querySelector('input[name="webserver_addr"]');
 ['webserver_port','webserver_user','webserver_password'].forEach(n=>{
   const el = document.querySelector(`[name="${n}"]`);
   const toggle = ()=>{ el.required = webHost.value.trim() !== ''; };
