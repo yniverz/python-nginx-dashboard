@@ -126,7 +126,7 @@ class DataclassJSONDecoder(json.JSONDecoder):
     """
     _registry: dict[str, Type] = {
         "FRPSWebserver": FRPSWebserver,
-        "FPRServer": FRPServer,
+        "FRPServer": FRPServer,
         "FRPConnection": FRPConnection,
         "FRPClient": FRPClient,
     }
