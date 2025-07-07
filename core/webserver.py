@@ -21,7 +21,7 @@ class ProxyManager:
 
         self.app = Flask("ProxyManager", template_folder='core/templates')
         self.app.config.update(
-            application_root=application_root,
+            APPLICATION_ROOT=application_root,
             # SESSION_COOKIE_SECURE=True,       # only sent over HTTPS
             # SESSION_COOKIE_HTTPONLY=True,     # JS can’t read
             # SESSION_COOKIE_SAMESITE="Strict", # no cross-site requests
