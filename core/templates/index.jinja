@@ -155,13 +155,13 @@
         <input type="submit" value="Add Gateway Client">
     </form>
     <table>
-        <tr><th>ID</th><th>Host/Server</th><th>Bind Port</th><th>Webserver</th><th>Actions</th></tr>
+        <tr><th>ID</th><th>Host/Server</th><th>Bind Port</th><th>Online</th><th>Actions</th></tr>
         {% for server in gateway_server_list %}
             <tr>
                 <td style="text-align: right;">{{ server.id }}</td>
                 <td>{{ server.host }}</td>
                 <td>{{ server.bind_port }}</td>
-                <td>{{ "Active" if server.webserver else "N/A" }}</td>
+                <td>{{ "Active" if server.is_online() else "Inactive" }}</td>
                 <td>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <form method="GET" action="{{ application_root + url_for('edit_gateway_server') }}" style="display:inline;">

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import dataclasses
 import json
+import time
 from typing import Any, Type
 
 
@@ -28,6 +29,7 @@ class FRPServer:
     bind_port: int
     auth_token: str
     webserver: FRPSWebserver = None
+    last_request: int = 0
 
     def generate_config_toml(self) -> str:
         config = f"""
@@ -41,6 +43,15 @@ additionalScopes = [ "HeartBeats",]
         if self.webserver:
             config += self.webserver.generate_config_toml()
         return config.strip()
+    
+    def was_requested(self):
+        self.last_request = int(time.time())
+
+    def is_online(self) -> bool:
+        """
+        Check if the server was requested in the last 5 minutes.
+        """
+        return (int(time.time()) - self.last_request) < 120
 
 @dataclass
 class FRPConnection:
@@ -72,8 +83,8 @@ remotePort = {self.remotePort}
 class FRPClient:
     id: str
     server: FRPServer
-    # connections: list[FRPConnection] = []
     connections: list[FRPConnection] = dataclasses.field(default_factory=list)
+    last_request: int = 0
 
     def generate_config_toml(self) -> str:
         config = f"""
@@ -89,6 +100,15 @@ additionalScopes = ["HeartBeats"]
             config += connection.generate_config_toml() + "\n"
 
         return config.strip()
+    
+    def was_requested(self):
+        self.last_request = int(time.time())
+
+    def is_online(self) -> bool:
+        """
+        Check if the server was requested in the last 5 minutes.
+        """
+        return (int(time.time()) - self.last_request) < 120
 
 
 

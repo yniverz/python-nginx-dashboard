@@ -514,6 +514,8 @@ class ProxyManager:
         server = self.frp_manager.get_server_by_id(server_id)
         if not server:
             return abort(404)
+        
+        server.was_requested()
 
         return server.generate_config_toml()
 
@@ -525,6 +527,8 @@ class ProxyManager:
         client = self.frp_manager.get_client_by_id(client_id)
         if not client:
             return abort(404)
+        
+        client.was_requested()
 
         return client.generate_config_toml()
     
