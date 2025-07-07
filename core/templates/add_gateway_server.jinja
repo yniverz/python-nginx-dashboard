@@ -21,7 +21,7 @@
         <input type="text" name="host" placeholder="Host" required><br>
         <input type="text" name="bind_port" placeholder="Bind Port" required><br>
         <input type="text" name="auth_token" placeholder="Auth Token" required><br>
-        <input type="text" name="webserver_host" placeholder="Webserver Host (optional)"><br>
+        <input type="text" name="webserver_addr" placeholder="Webserver Address (optional)"><br>
         <input type="text" name="webserver_port" placeholder="Webserver Port (optional)"><br>
         <input type="text" name="webserver_user" placeholder="Webserver User (optional)"><br>
         <input type="password" name="webserver_password" placeholder="Webserver Password (optional)"><br>
@@ -30,8 +30,8 @@
 </div>
 
 <script>
-// make all webserver fields required when webserver_host is filled, and optional when empty
-const webserverHost = document.querySelector('input[name="webserver_host"]');
+// make all webserver fields required when webserver_addr is filled, and optional when empty
+const webserverAddr = document.querySelector('input[name="webserver_addr"]');
 const webserverPort = document.querySelector('input[name="webserver_port"]');
 const webserverUser = document.querySelector('input[name="webserver_user"]');
 const webserverPassword = document.querySelector('input[name="webserver_password"]');
