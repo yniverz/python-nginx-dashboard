@@ -107,7 +107,13 @@ class ProxyManager:
         if not session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('login'))
 
-        return render_template("index.jinja", proxy_map=self.nginx_manager.proxy_map, gateway_server_list=self.frp_manager.get_server_list(), gateway_connection_list=self.frp_manager.get_connection_list(), domain=self.nginx_manager.domain, application_root=self.app.config['APPLICATION_ROOT'])
+        return render_template("index.jinja", 
+                               proxy_map=self.nginx_manager.proxy_map, 
+                               gateway_server_list=self.frp_manager.get_server_list(), 
+                               gateway_client_list=self.frp_manager.get_client_list(), 
+                               gateway_connection_list=self.frp_manager.get_connection_list(), 
+                               domain=self.nginx_manager.domain, 
+                               application_root=self.app.config['APPLICATION_ROOT'])
 
 
 
