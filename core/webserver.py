@@ -20,8 +20,8 @@ class ProxyManager:
         self.allowed_api_keys = allowed_api_keys
 
         self.app = Flask("ProxyManager", template_folder='core/templates')
-        self.app.config['APPLICATION_ROOT'] = application_root
         self.app.config.update(
+            application_root=application_root,
             SESSION_COOKIE_SECURE=True,       # only sent over HTTPS
             SESSION_COOKIE_HTTPONLY=True,     # JS can’t read
             SESSION_COOKIE_SAMESITE="Strict", # no cross-site requests
@@ -30,9 +30,9 @@ class ProxyManager:
         self.app.secret_key = uuid.uuid4().hex
 
         self.limiter = Limiter(
-            key_func=get_remote_address,
-            storage_uri="memory://localhost:6379",   # or "memory://"
-            default_limits=[]
+            key_func=lambda: "dashboard-owner",
+            storage_uri="memory://",
+            default_limits=["1 per second", "30 per minute"],
         )
         self.limiter.init_app(self.app)
 
@@ -105,7 +105,7 @@ class ProxyManager:
     #         return jsonify({"u": self.USERNAME, "p": self.PASSWORD})
 
     #     return abort(404)
-
+    
     def login(self):
         if session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
@@ -520,7 +520,7 @@ class ProxyManager:
         return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
     
     def get_gateway_server_config(self, server_id):
-        token = request.args.get('token')
+        token = request.headers.get("X-Gateway-Token")
         if not token:
             return abort(404)
 
@@ -536,7 +536,7 @@ class ProxyManager:
         return server.generate_config_toml()
 
     def get_gateway_client_config(self, client_id):
-        token = request.args.get('token')
+        token = request.headers.get("X-Gateway-Token")
         if not token:
             return abort(404)
 
