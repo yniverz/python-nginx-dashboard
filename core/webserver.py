@@ -32,7 +32,7 @@ class ProxyManager:
         self.limiter = Limiter(
             key_func=lambda: "dashboard-owner",
             storage_uri="memory://",
-            default_limits=["1 per second", "30 per minute"],
+            default_limits=["10 per second", "60 per minute"],
         )
         self.limiter.init_app(self.app)
 
