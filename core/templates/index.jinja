@@ -154,6 +154,9 @@
     <form method="GET" action="{{ application_root + url_for('add_gateway_server') }}">
         <input type="submit" value="Add Gateway Server">
     </form>
+    <form method="GET" action="{{ application_root + url_for('add_gateway_client') }}">
+        <input type="submit" value="Add Gateway Client">
+    </form>
     <table>
         <tr><th>ID</th><th>Host/Server</th><th>Bind Port</th><th>Webserver</th><th>Actions</th></tr>
         {% for server in gateway_server_list %}
