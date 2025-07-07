@@ -508,7 +508,7 @@ class ProxyManager:
     
     def get_gateway_server_config(self, server_id):
         token = request.args.get('token')
-        if not session.get('logged_in') and (not token or token not in self.allowed_api_keys):
+        if not token or token not in self.allowed_api_keys:
             return abort(404)
 
         server = self.frp_manager.get_server_by_id(server_id)
@@ -519,7 +519,7 @@ class ProxyManager:
 
     def get_gateway_client_config(self, client_id):
         token = request.args.get('token')
-        if not session.get('logged_in') and (not token or token not in self.allowed_api_keys):
+        if not token or token not in self.allowed_api_keys:
             return abort(404)
 
         client = self.frp_manager.get_client_by_id(client_id)
