@@ -49,10 +49,12 @@ class FRPConnection:
     localIP: str
     localPort: int
     remotePort: int
-    # flags: list[str] = ["transport.useEncryption = true"]
     flags: list[str] = dataclasses.field(default_factory=lambda: ["transport.useEncryption = true"])
+    active: bool = True
 
     def generate_config_toml(self) -> str:
+        if not self.active:
+            return ""
         config = f"""
 [[proxies]]
 name = "{self.name}"
@@ -200,6 +202,20 @@ class AutoFRPManager:
                 return server
         raise ValueError(f"Server with ID {server_id} not found.")
     
+    def get_client_by_id(self, client_id: str) -> FRPClient:
+        for client in self.datastore.clients:
+            if client.id == client_id:
+                return client
+        raise ValueError(f"Client with ID {client_id} not found.")
+    
+    def get_connection_by_name(self, client_id: str, connection_name: str) -> FRPConnection:
+        for client in self.datastore.clients:
+            if client.id == client_id:
+                for connection in client.connections:
+                    if connection.name == connection_name:
+                        return connection
+        raise ValueError(f"Connection with name {connection_name} not found in client {client_id}.")
+    
     def get_connection_list(self) -> list[dict]:
         result = []
         for client in self.datastore.clients:
@@ -223,8 +239,26 @@ class AutoFRPManager:
         self.datastore.add_server(server)
         self.save_config()
 
+    def update_server(self, server: FRPServer):
+        self.datastore.servers = [s for s in self.datastore.servers if s.id != server.id]
+        self.datastore.servers.append(server)
+        self.save_config()
+
+    def remove_server(self, server_id: str):
+        self.datastore.servers = [s for s in self.datastore.servers if s.id != server_id]
+        self.save_config()
+
     def add_client(self, client: FRPClient):
         self.datastore.add_client(client)
+        self.save_config()
+
+    def update_client(self, client: FRPClient):
+        self.datastore.clients = [c for c in self.datastore.clients if c.id != client.id]
+        self.datastore.clients.append(client)
+        self.save_config()
+
+    def remove_client(self, client_id: str):
+        self.datastore.clients = [c for c in self.datastore.clients if c.id != client_id]
         self.save_config()
 
     def add_connection_to_client(self, client_id: str, connection: FRPConnection):
@@ -234,14 +268,15 @@ class AutoFRPManager:
                 self.save_config()
                 return
         raise ValueError(f"Client with ID {client_id} not found.")
-
-    def remove_server(self, server_id: str):
-        self.datastore.servers = [s for s in self.datastore.servers if s.id != server_id]
-        self.save_config()
-
-    def remove_client(self, client_id: str):
-        self.datastore.clients = [c for c in self.datastore.clients if c.id != client_id]
-        self.save_config()
+    
+    def update_connection(self, client_id: str, connection: FRPConnection):
+        for client in self.datastore.clients:
+            if client.id == client_id:
+                client.connections = [c for c in client.connections if c.name != connection.name]
+                client.connections.append(connection)
+                self.save_config()
+                return
+        raise ValueError(f"Client with ID {client_id} not found.")
 
     def remove_connection_from_client(self, client_id: str, connection_name: str):
         for client in self.datastore.clients:

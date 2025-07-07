@@ -264,6 +264,10 @@ class ProxyManager:
 
 
 
+
+
+
+
     def add_gateway_server(self):
         if not session.get('logged_in'):
             return abort(404)
@@ -298,6 +302,54 @@ class ProxyManager:
 
         return render_template("add_gateway_server.jinja", application_root=self.app.config['APPLICATION_ROOT'])
     
+    def edit_gateway_server(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        server_id = request.args.get('server_id')
+        server = self.frp_manager.get_server_by_id(server_id)
+        if not server:
+            return abort(404)
+
+        if request.method == 'POST':
+            form_dict = request.form.to_dict()
+            webserver = None
+            if form_dict.get("webserver_host", '').strip() != '':
+                webserver = FRPSWebserver(
+                    host=form_dict['webserver_host'],
+                    port=int(form_dict['webserver_port']),
+                    user=form_dict.get('webserver_user', '').strip(),
+                    password=form_dict.get('webserver_password', '').strip()
+                )
+
+            server.host = form_dict['host']
+            server.bind_port = int(form_dict['bind_port'])
+            server.auth_token = form_dict['auth_token']
+            server.webserver = webserver
+
+            try:
+                self.frp_manager.update_server(server)
+                flash('Gateway server updated successfully', 'success')
+            except Exception as e:
+                flash(f'Error updating gateway server: {str(e)}', 'error')
+
+            return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+
+        return render_template("edit_gateway_server.jinja", application_root=self.app.config['APPLICATION_ROOT'], server=server)
+    
+    def delete_gateway_server(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        server_id = request.form['server_id']
+        try:
+            self.frp_manager.remove_server(server_id)
+            flash('Gateway server deleted successfully', 'success')
+        except Exception as e:
+            flash(f'Error deleting gateway server: {str(e)}', 'error')
+
+        return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+    
     def add_gateway_client(self):
         if not session.get('logged_in'):
             return abort(404)
@@ -317,6 +369,42 @@ class ProxyManager:
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
         return render_template("add_gateway_client.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_server_list=self.frp_manager.get_server_list())
+
+    def edit_gateway_client(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        client_id = request.args.get('client_id')
+        client = self.frp_manager.get_client_by_id(client_id)
+        if not client:
+            return abort(404)
+
+        if request.method == 'POST':
+            client.server = self.frp_manager.get_server_by_id(request.form['server_id'])
+            client.id = request.form['client_id']
+
+            try:
+                self.frp_manager.update_client(client)
+                flash('Gateway client updated successfully', 'success')
+            except Exception as e:
+                flash(f'Error updating gateway client: {str(e)}', 'error')
+
+            return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+
+        return render_template("edit_gateway_client.jinja", application_root=self.app.config['APPLICATION_ROOT'], client=client, gateway_server_list=self.frp_manager.get_server_list())
+
+    def delete_gateway_client(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        client_id = request.form['client_id']
+        try:
+            self.frp_manager.remove_client(client_id)
+            flash('Gateway client deleted successfully', 'success')
+        except Exception as e:
+            flash(f'Error deleting gateway client: {str(e)}', 'error')
+
+        return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
     def add_gateway_connection(self):
         if not session.get('logged_in'):
@@ -349,3 +437,46 @@ class ProxyManager:
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
         return render_template("add_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], gateway_client_list=self.frp_manager.get_client_list())
+    
+    def edit_gateway_connection(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        client_id = request.args.get('client_id')
+        connection_name = request.args.get('connection_name')
+        connection = self.frp_manager.get_connection_by_name(client_id, connection_name)
+        if not connection:
+            return abort(404)
+
+        if request.method == 'POST':
+            connection.name = request.form['name']
+            connection.type = request.form['type']
+            connection.localIP = request.form['local_ip']
+            connection.localPort = int(request.form['local_port'])
+            connection.remotePort = int(request.form['remote_port'])
+            connection.flags = request.form.getlist('flags')
+
+            try:
+                self.frp_manager.update_connection(client_id, connection)
+                flash('Gateway connection updated successfully', 'success')
+            except Exception as e:
+                flash(f'Error updating gateway connection: {str(e)}', 'error')
+
+            return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
+
+        return render_template("edit_gateway_connection.jinja", application_root=self.app.config['APPLICATION_ROOT'], client_id=client_id, connection=connection)
+
+    def delete_gateway_connection(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        client_id = request.form['client_id']
+        connection_name = request.form['connection_name']
+
+        try:
+            self.frp_manager.remove_connection_from_client(client_id, connection_name)
+            flash('Gateway connection deleted successfully', 'success')
+        except Exception as e:
+            flash(f'Error deleting gateway connection: {str(e)}', 'error')
+
+        return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
