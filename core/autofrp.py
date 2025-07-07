@@ -167,7 +167,7 @@ class FRPManagerDataStore:
 
     def to_json_file(self, path: str):
         with open(path, 'w') as f:
-            json.dump(self, f, cls=DataclassJSONEncoder)
+            json.dump(self.__dict__, f, cls=DataclassJSONEncoder)
 
     def from_json_file(self, path: str):
         try:
