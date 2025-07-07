@@ -11,6 +11,11 @@ from core.nginx import NginxConfigManager, ProxyTarget
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+LIMITER = Limiter(
+    key_func=lambda: "dashboard-owner",
+    storage_uri="memory://"
+)
+
 class ProxyManager:
     def __init__(self, nginx_manager: NginxConfigManager, frp_manager: AutoFRPManager, application_root, USERNAME, PASSWORD, allowed_api_keys = []):
         self.nginx_manager = nginx_manager
@@ -28,13 +33,6 @@ class ProxyManager:
             PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
         )
         self.app.secret_key = uuid.uuid4().hex
-
-        self.limiter = Limiter(
-            key_func=lambda: "dashboard-owner",
-            storage_uri="memory://",
-            default_limits=["10 per second", "60 per minute"],
-        )
-        self.limiter.init_app(self.app)
 
         self.app.errorhandler(404)(self.standard_error)
         self.app.errorhandler(405)(self.standard_error)
@@ -106,6 +104,7 @@ class ProxyManager:
 
     #     return abort(404)
     
+    @LIMITER.limit("30 per minute")
     def login(self):
         if session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
@@ -114,6 +113,8 @@ class ProxyManager:
             username = request.form['username']
             password = request.form['password']
             if username == self.USERNAME and password == self.PASSWORD:
+                session.clear()
+                session.permanent = True
                 session['logged_in'] = True
                 return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
             else:
@@ -519,6 +520,7 @@ class ProxyManager:
 
         return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
     
+    @LIMITER.limit("100 per minute")
     def get_gateway_server_config(self, server_id):
         token = request.headers.get("X-Gateway-Token")
         if not token:
@@ -535,6 +537,7 @@ class ProxyManager:
 
         return server.generate_config_toml()
 
+    @LIMITER.limit("100 per minute")
     def get_gateway_client_config(self, client_id):
         token = request.headers.get("X-Gateway-Token")
         if not token:
