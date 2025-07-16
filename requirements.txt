@@ -1,0 +1,8 @@
+Flask
+Flask-Limiter
+Flask-WTF
+waitress
+redis
+cloudflare
+requests
+dnspython
