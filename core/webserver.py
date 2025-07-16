@@ -23,11 +23,12 @@ def get_limiter_login_fail_key():
     """Get the Redis key for tracking login failures."""
     return f"login_fail:{get_remote_address()}"
 
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+r = redis.Redis()#host='localhost', port=6379, db=0, decode_responses=True)
 
 LIMITER = Limiter(
     key_func=get_remote_address,
-    storage_uri="redis://localhost:6379/0",
+    # storage_uri="redis://localhost:6379/0",
+    storage_uri="memory://",
 )
 
 def login_backoff_limit():
