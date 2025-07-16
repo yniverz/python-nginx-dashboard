@@ -2,7 +2,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
-from core.cloudflare import CloudFlareMapEntry, CloudFlareSRVManager
+from core.cloudflare import CloudFlareMapEntry, CloudFlareSRVManager, CloudflareIPCache
 
 
 @dataclass
@@ -40,6 +40,7 @@ class NginxConfigManager:
         }
 
         self.cf = CloudFlareSRVManager(cloudflare_token, self.domain)
+        self.cf_ip_cache = CloudflareIPCache()
         self.cloudflare_srv_map: list[CloudFlareMapEntry] = []
 
         self.global_upstream_counter = 0
@@ -268,6 +269,23 @@ class NginxConfigManager:
         return upstream_blocks
 
 
+    def _get_cf_ip_ranges(self):
+        ipv4, ipv6 = self.cf_ip_cache.get()
+
+        ip_block = ""
+        for ip in ipv4:
+            if not ip.startswith("#"):
+                ip_block += f"set_real_ip_from {ip};\n"
+        for ip in ipv6:
+            if not ip.startswith("#"):
+                ip_block += f"set_real_ip_from {ip};\n"
+
+        if ip_block:
+            ip_block += "\n"
+            ip_block += "real_ip_header CF-Connecting-IP;\n"
+            ip_block += "real_ip_recursive on;\n"
+                
+        return ip_block
 
 
     def _generate_http_config(self):
@@ -276,6 +294,8 @@ map $http_upgrade $connection_upgrade {{
     default upgrade;
     '' close;
 }}
+
+{self._get_cf_ip_ranges()}
 
 server {{
     listen 80;

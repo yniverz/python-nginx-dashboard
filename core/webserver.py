@@ -1,20 +1,49 @@
 from datetime import timedelta
 import json
 import random
+import secrets
 import threading
 import time
 import uuid
+import redis
 import waitress
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from core.autofrp import AutoFRPManager, FRPSWebserver, FRPServer, FRPClient, FRPConnection
 from core.nginx import NginxConfigManager, ProxyTarget
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+
+def get_remote_address():
+    """Get the remote address from the request, falling back to X-Real-IP."""
+    return request.headers.get("X-Real-IP", request.remote_addr)
+
+def get_limiter_login_fail_key():
+    """Get the Redis key for tracking login failures."""
+    return f"login_fail:{get_remote_address()}"
 
 LIMITER = Limiter(
-    key_func=lambda: "dashboard-owner",
-    storage_uri="memory://"
+    key_func=get_remote_address,
+    storage_uri="memory://",
 )
+
+r = redis.Redis()
+
+def login_backoff_limit():
+    fails = int(r.get(get_limiter_login_fail_key()) or 0)
+
+    # tiered policy:
+    #   0 fails → 5/min
+    #   1 fail  → 3/min
+    #   2+ fails → 1 per (2**(fails-1)) seconds, capped 300s
+    if fails == 0:
+        return "5 per minute"
+    if fails == 1:
+        return "3 per minute"
+
+    window = min(2 ** (fails - 1), 300)  # seconds
+    # Flask-Limiter time units are whole nouns; use "second" if window==1 else "seconds"
+    unit = "second" if window == 1 else "seconds"
+    return f"1 per {window} {unit}"
+
 
 class ProxyManager:
     def __init__(self, nginx_manager: NginxConfigManager, frp_manager: AutoFRPManager, application_root, USERNAME, PASSWORD, allowed_api_keys = []):
@@ -27,12 +56,12 @@ class ProxyManager:
         self.app = Flask("ProxyManager", template_folder='core/templates')
         self.app.config.update(
             APPLICATION_ROOT=application_root,
+            SECRET_KEY=uuid.uuid4().hex,
             SESSION_COOKIE_SECURE=True,       # only sent over HTTPS
             SESSION_COOKIE_HTTPONLY=True,     # JS can’t read
             SESSION_COOKIE_SAMESITE="Strict", # no cross-site requests
             PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
         )
-        self.app.secret_key = uuid.uuid4().hex
 
         self.app.errorhandler(404)(self.standard_error)
         self.app.errorhandler(405)(self.standard_error)
@@ -104,24 +133,36 @@ class ProxyManager:
 
     #     return abort(404)
     
-    @LIMITER.limit("30 per minute")
+    @LIMITER.limit(login_backoff_limit())
     def login(self):
         if session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
         if request.method == 'POST':
+            if request.form.get('csrf') != session.pop('csrf', None):
+                time.sleep(2)
+                abort(400)
+
             username = request.form['username']
             password = request.form['password']
             if username == self.USERNAME and password == self.PASSWORD:
+                r.delete(get_limiter_login_fail_key())
                 session.clear()
                 session.permanent = True
                 session['logged_in'] = True
                 return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
             else:
+                pipe = r.pipeline()
+                key = get_limiter_login_fail_key()
+                pipe.incr(key)
+                pipe.expire(key, 900)  # reset after 15 minutes quiet
+                pipe.execute()
+                
                 time.sleep(5)
                 flash('Invalid username or password', 'error')
 
-        return render_template("login.html")
+        session['csrf'] = secrets.token_hex(16)
+        return render_template("login.jinja", csrf=session['csrf'])
 
 
     def logout(self):

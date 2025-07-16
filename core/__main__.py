@@ -4,15 +4,22 @@ import threading
 import time
 import traceback
 import dns.resolver
+import dns.exception
 from core.autofrp import AutoFRPManager
 from core.nginx import NginxConfigManager
 from core.webserver import ProxyManager
 
+resolver = dns.resolver.Resolver()
+resolver.timeout   = 2.0     # per try
+resolver.lifetime  = 5.0     # total
+resolver.retry_servfail = True
+resolver.use_edns(0)         # disables EDNS, see 17
 
-
-def get_dns(domain: str):
-    answers = dns.resolver.resolve(domain,'A')
-    return answers[0].address
+def get_dns(domain):
+    try:
+        return resolver.resolve(domain, 'A', edns=0, udp_size=1232)[0].address
+    except (dns.resolver.NXDOMAIN, dns.exception.Timeout):
+        return None
 
 def dns_watcher(config_manager: NginxConfigManager, domains: list[str]):
     domain_store = {}
