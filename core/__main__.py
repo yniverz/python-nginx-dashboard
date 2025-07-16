@@ -17,7 +17,7 @@ resolver.use_edns(0)         # disables EDNS, see 17
 
 def get_dns(domain):
     try:
-        return resolver.resolve(domain, 'A', udp_size=1232)[0].address
+        return resolver.resolve(domain, 'A')[0].address
     except (dns.resolver.NXDOMAIN, dns.exception.Timeout):
         return None
 
