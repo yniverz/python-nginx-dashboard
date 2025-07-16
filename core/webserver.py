@@ -5,27 +5,30 @@ import secrets
 import threading
 import time
 import uuid
+from flask_wtf import CSRFProtect
 import redis
 import waitress
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 from core.autofrp import AutoFRPManager, FRPSWebserver, FRPServer, FRPClient, FRPConnection
 from core.nginx import NginxConfigManager, ProxyTarget
 from flask_limiter import Limiter
 
 def get_remote_address():
     """Get the remote address from the request, falling back to X-Real-IP."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return request.remote_addr
     return request.headers.get("X-Real-IP", request.remote_addr)
 
 def get_limiter_login_fail_key():
     """Get the Redis key for tracking login failures."""
     return f"login_fail:{get_remote_address()}"
 
+r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+
 LIMITER = Limiter(
     key_func=get_remote_address,
-    storage_uri="memory://",
+    storage_uri="redis://localhost:6379/0",
 )
-
-r = redis.Redis()
 
 def login_backoff_limit():
     fails = int(r.get(get_limiter_login_fail_key()) or 0)
@@ -44,6 +47,14 @@ def login_backoff_limit():
     unit = "second" if window == 1 else "seconds"
     return f"1 per {window} {unit}"
 
+def frp_backoff_limit():
+    ip = get_remote_address()
+    fails = int(r.get(f"frp_fail:{ip}") or 0)
+    if fails == 0:
+        return "100 per minute"
+    window = min(2 ** fails, 600)
+    return f"20 per minute; 1 per {window} seconds"
+
 
 class ProxyManager:
     def __init__(self, nginx_manager: NginxConfigManager, frp_manager: AutoFRPManager, application_root, USERNAME, PASSWORD, allowed_api_keys = []):
@@ -57,6 +68,7 @@ class ProxyManager:
         self.app.config.update(
             APPLICATION_ROOT=application_root,
             SECRET_KEY=uuid.uuid4().hex,
+            WTF_CSRF_TIME_LIMIT=3600,
             SESSION_COOKIE_SECURE=True,       # only sent over HTTPS
             SESSION_COOKIE_HTTPONLY=True,     # JS can’t read
             SESSION_COOKIE_SAMESITE="Strict", # no cross-site requests
@@ -91,6 +103,10 @@ class ProxyManager:
 
         self.app.add_url_rule('/api/gateway/server/<server_id>', 'gateway_server_config', self.get_gateway_server_config, methods=['GET'])
         self.app.add_url_rule('/api/gateway/client/<client_id>', 'gateway_client_config', self.get_gateway_client_config, methods=['GET'])
+
+        self.csrf = CSRFProtect(self.app)
+        self.csrf.exempt(self.get_gateway_server_config)
+        self.csrf.exempt(self.get_gateway_client_config)
 
     def run(self):
         print("Running server")
@@ -133,16 +149,12 @@ class ProxyManager:
 
     #     return abort(404)
     
-    @LIMITER.limit(login_backoff_limit())
+    @LIMITER.limit(login_backoff_limit)
     def login(self):
         if session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
 
         if request.method == 'POST':
-            if request.form.get('csrf') != session.pop('csrf', None):
-                time.sleep(2)
-                abort(400)
-
             username = request.form['username']
             password = request.form['password']
             if username == self.USERNAME and password == self.PASSWORD:
@@ -157,12 +169,10 @@ class ProxyManager:
                 pipe.incr(key)
                 pipe.expire(key, 900)  # reset after 15 minutes quiet
                 pipe.execute()
-                
-                time.sleep(5)
+
                 flash('Invalid username or password', 'error')
 
-        session['csrf'] = secrets.token_hex(16)
-        return render_template("login.jinja", csrf=session['csrf'])
+        return render_template("login.jinja")
 
 
     def logout(self):
@@ -342,7 +352,7 @@ class ProxyManager:
             webserver = None
             if form_dict.get("webserver_addr", '').strip() != '':
                 webserver = FRPSWebserver(
-                    host=form_dict['webserver_addr'],
+                    addr=form_dict['webserver_addr'],
                     port=int(form_dict['webserver_port']),
                     user=form_dict.get('webserver_user', '').strip(),
                     password=form_dict.get('webserver_password', '').strip()
@@ -561,7 +571,7 @@ class ProxyManager:
 
         return redirect(self.app.config['APPLICATION_ROOT'] + url_for('index'))
     
-    @LIMITER.limit("100 per minute")
+    @LIMITER.limit(frp_backoff_limit)
     def get_gateway_server_config(self, server_id):
         token = request.headers.get("X-Gateway-Token")
         if not token:
@@ -578,7 +588,7 @@ class ProxyManager:
 
         return server.generate_config_toml()
 
-    @LIMITER.limit("100 per minute")
+    @LIMITER.limit(frp_backoff_limit)
     def get_gateway_client_config(self, client_id):
         token = request.headers.get("X-Gateway-Token")
         if not token:

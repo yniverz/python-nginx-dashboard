@@ -1,3 +1,4 @@
+{% from "_csrf.jinja" import csrf_field %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,6 +16,7 @@
         <input type="text" name="subdomain" placeholder="Subdomain" required>
         <input type="text" name="path" id="path" placeholder="Path" required>
         <input type="text" name="route" placeholder="Route" required>
+        {{ csrf_field() }}
         <input type="submit" value="Add Redirect">
     </form>
 </div>

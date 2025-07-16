@@ -1,3 +1,4 @@
+{% from "_csrf.jinja" import csrf_field %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -62,6 +63,7 @@
         <input type="hidden" name="backend_path" value="{{ backend_path }}">
 
         <input type="hidden" id="targetsInput" name="targets">
+        {{ csrf_field() }}
         <input type="submit" id="submitBtn" value="Update Route">
     </form>
 

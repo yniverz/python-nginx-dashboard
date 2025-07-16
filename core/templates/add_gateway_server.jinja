@@ -1,3 +1,4 @@
+{% from "_csrf.jinja" import csrf_field %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,6 +26,7 @@
         <input type="text" name="webserver_port" placeholder="Webserver Port (optional)"><br>
         <input type="text" name="webserver_user" placeholder="Webserver User (optional)"><br>
         <input type="password" name="webserver_password" placeholder="Webserver Password (optional)"><br>
+        {{ csrf_field() }}
         <input type="submit" value="Add Gateway Server">
     </form>
 </div>
@@ -36,8 +38,8 @@ const webserverPort = document.querySelector('input[name="webserver_port"]');
 const webserverUser = document.querySelector('input[name="webserver_user"]');
 const webserverPassword = document.querySelector('input[name="webserver_password"]');
 
-webserverHost.addEventListener('input', () => {
-    const isRequired = webserverHost.value.trim() !== '';
+webserverAddr.addEventListener('input', () => {
+    const isRequired = webserverAddr.value.trim() !== '';
     webserverPort.required = isRequired;
     webserverUser.required = isRequired;
     webserverPassword.required = isRequired;

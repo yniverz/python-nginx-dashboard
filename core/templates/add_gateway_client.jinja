@@ -1,3 +1,4 @@
+{% from "_csrf.jinja" import csrf_field %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,7 +18,6 @@
 <div class="container">
     <h2>Add Gateway Client</h2>
 
-    <!-- this POSTs to your Flask route -->
     <form method="POST" action="{{ application_root + url_for('add_gateway_client') }}">
 
         <!-- pick which gateway server the connection belongs to -->
@@ -30,6 +30,7 @@
 
         <input type="text"     name="client_id"        placeholder="Client Name (UUID)" required>
 
+        {{ csrf_field() }}
         <input type="submit" value="Add Gateway Client">
     </form>
 </div>

@@ -1,3 +1,4 @@
+{% from "_csrf.jinja" import csrf_field %}
 <style>
     body { font-family: Arial, sans-serif; }
     .container { max-width: 300px; margin: 100px auto; text-align: center; }
@@ -7,7 +8,7 @@
     <form method="POST">
         <input type="text" name="username" placeholder="Username" required><br><br>
         <input type="password" name="password" placeholder="Password" required><br><br>
-        <input type="hidden" name="csrf" value="{{ csrf }}">
+        {{ csrf_field() }}
         <input type="submit" value="Login">
     </form>
 </div>
