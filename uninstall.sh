@@ -17,4 +17,4 @@ if [[ -f "${SERVICE_FILE}" ]]; then
 fi
 
 sudo systemctl daemon-reload
-echo "✅ Service uninstalled. Virtualenv (${VENV_DIR}) and APT packages remain untouched."
+echo "✅ Service uninstalled."
