@@ -1,25 +1,24 @@
 #!/usr/bin/env bash
-# One‑shot installer:
-#   • Installs system deps (python3‑venv, screen)
-#   • Creates a venv called "my-venv"
-#   • Installs requirements.txt into that venv
-#   • Writes a launcher that executes:  my-venv/bin/python -m core
-#   • Registers & starts a systemd service that runs the launcher in screen
+# Install & register a systemd service that runs `python -m core` from a venv.
+# Logs are written to /var/log/<APP_NAME>/<APP_NAME>.log
 
 set -euo pipefail
 
-########## EDITABLE VALUES ##########
-APP_NAME="python-nginx-dashboard"          # logical name: screen session + systemd service
-VENV_DIR="py-venv"       # folder for the virtualenv (relative to repo root)
-PY_MODULE="core"         # module to run via  python -m
-#####################################
+########## EDIT THESE IF NEEDED ##########
+APP_NAME="python-nginx-dashboard"          # becomes: python-nginx-dashboard.service  +  /var/log/python-nginx-dashboard/python-nginx-dashboard.log
+VENV_DIR="py-venv"       # virtualenv folder in repo
+PY_MODULE="core"         # python -m <module>
+##########################################
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_USER="${SUDO_USER:-$USER}"
 
-echo "➤ Installing APT packages …"
+LOG_DIR="/var/log/${APP_NAME}"
+LOG_FILE="${LOG_DIR}/${APP_NAME}.log"
+
+echo "➤ Installing python3-venv (if needed)…"
 sudo apt-get update -qq
-sudo apt-get install -y python3 python3-venv screen
+sudo apt-get install -y python3 python3-venv
 
 if [[ ! -d "$REPO_DIR/$VENV_DIR" ]]; then
   echo "➤ Creating virtualenv $VENV_DIR …"
@@ -28,34 +27,30 @@ fi
 
 echo "➤ Installing Python deps …"
 "$REPO_DIR/$VENV_DIR/bin/pip" install --upgrade pip
-if [[ -f "$REPO_DIR/requirements.txt" ]]; then
+[[ -f "$REPO_DIR/requirements.txt" ]] && \
   "$REPO_DIR/$VENV_DIR/bin/pip" install -r "$REPO_DIR/requirements.txt"
-fi
 
-echo "➤ Writing launcher …"
-LAUNCHER="$REPO_DIR/run_${APP_NAME}.sh"
-cat > "$LAUNCHER" <<EOF
-#!/usr/bin/env bash
-# Auto‑generated: starts $PY_MODULE inside screen
-exec /usr/bin/screen -DmS "$APP_NAME" "$REPO_DIR/$VENV_DIR/bin/python" -m "$PY_MODULE"
-EOF
-chmod +x "$LAUNCHER"
+echo "➤ Creating log directory $LOG_DIR …"
+sudo mkdir -p "$LOG_DIR"
+sudo touch "$LOG_FILE"
+sudo chown "$RUN_USER":"$RUN_USER" "$LOG_DIR" "$LOG_FILE"
 
-SERVICE_FILE="/etc/systemd/system/${APP_NAME}-screen.service"
-echo "➤ Creating systemd unit $SERVICE_FILE …"
+SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
+echo "➤ Writing systemd unit $SERVICE_FILE …"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
-Description=${APP_NAME} module in GNU Screen
+Description=${APP_NAME} Python module
 After=network.target
 
 [Service]
-Type=forking
+Type=simple
 User=${RUN_USER}
 WorkingDirectory=${REPO_DIR}
-ExecStart=${LAUNCHER}
-ExecStop=/usr/bin/screen -S ${APP_NAME} -X quit
+ExecStart=${REPO_DIR}/${VENV_DIR}/bin/python -m ${PY_MODULE}
 Restart=always
 RestartSec=5
+StandardOutput=append:${LOG_FILE}
+StandardError=append:${LOG_FILE}
 
 [Install]
 WantedBy=multi-user.target
@@ -65,7 +60,11 @@ echo "➤ Enabling & starting service …"
 sudo systemctl daemon-reload
 sudo systemctl enable --now "$(basename "$SERVICE_FILE")"
 
-echo
-echo "✅ ${APP_NAME} installed!"
-echo "  • Attach:  screen -r ${APP_NAME}"
-echo "  • Logs  :  journalctl -u ${APP_NAME}-screen -f"
+cat <<EOM
+
+✅ ${APP_NAME} installed and running!
+
+• Log file   : ${LOG_FILE}   (tail -f ${LOG_FILE})
+• Journalctl : journalctl -u ${APP_NAME} -f
+• Restart    : sudo systemctl restart ${APP_NAME}
+EOM

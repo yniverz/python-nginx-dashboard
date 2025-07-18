@@ -3,8 +3,8 @@
 
 set -euo pipefail
 
-APP_NAME="core"   # must match install.sh
-SERVICE="${APP_NAME}-screen.service"
+APP_NAME="python-nginx-dashboard"   # must match install.sh
+SERVICE="${APP_NAME}.service"
 SERVICE_FILE="/etc/systemd/system/${SERVICE}"
 
 echo "➤ Stopping & disabling ${SERVICE} …"
@@ -17,4 +17,4 @@ if [[ -f "${SERVICE_FILE}" ]]; then
 fi
 
 sudo systemctl daemon-reload
-echo "✅ Service uninstalled."
+echo "✅ Service uninstalled. venv and packages remain."
