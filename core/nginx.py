@@ -404,6 +404,9 @@ server {{
     proxy_connect_timeout 10s;
 }}
 """
+                    
+        # create path recursive directory if it does not exist
+        os.makedirs(os.path.dirname(self.stream_config_path), exist_ok=True)
 
         with open(self.stream_config_path, 'w') as stream_config_file:
             stream_config_file.write(stream_config)
