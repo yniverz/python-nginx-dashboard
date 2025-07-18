@@ -75,6 +75,8 @@ if __name__ == '__main__':
         cloudflare_token=config['cloudflare_token'],
     )
 
+    nginx_manager.reload_nginx()
+
     frp_manager = AutoFRPManager(config['gateway_proxy_map_file'])
 
     if CHECK_DOMAINS:
