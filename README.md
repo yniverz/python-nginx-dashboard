@@ -60,3 +60,29 @@ python -m core
 ```
 
 The web interface will be available at `http://127.0.0.1:8080`.
+
+
+## certbot
+
+```sh
+sudo apt update
+sudo apt install python3-certbot-dns-cloudflare
+```
+
+~/.secrets/certbot/cloudflare.ini:
+```
+dns_cloudflare_api_token = 0123456789abcdef0123456789abcdef01234567
+```
+
+```sh
+sudo chmod 600 ~/.secrets/certbot/cloudflare.ini
+
+sudo certbot certonly \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials ~/.secrets/certbot/cloudflare.ini \
+  --dns-cloudflare-propagation-seconds 60 \
+  -d example.com \
+  -d '*.example.com'
+
+sudo certbot renew --dry-run
+```
