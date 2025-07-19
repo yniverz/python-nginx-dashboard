@@ -95,20 +95,18 @@
 
     /* ---------- ping loop ---------- */
     async function ping() {
-      // const t0 = performance.now();
-      const t0 = Date.now();
+      const t0 = performance.now();
       try {
         const res = await fetch('?ping', { cache: 'no-store' });
         await res.json();
-        // const rtt = performance.now() - t0;
-        const rtt = Date.now() - t0;
+        const rtt = performance.now() - t0;
 
         samples.push(rtt);
         if (samples.length > MAX_SAMPLES) samples.shift();  // drop oldest
 
         drawChart();
       } catch {
-        status.textContent = 'Ping failed – check network or backend';
+        status.textContent = 'Ping failed - check network or backend';
         status.style.color = 'red';
         clearInterval(timerId);
       }
