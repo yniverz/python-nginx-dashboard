@@ -26,12 +26,12 @@
       const rtt = (end - start).toFixed(2);     // round‑trip (ms)
       const line = document.createElement('p');
       line.textContent =
-        `RTT: ${rtt} ms | server: ${data.server_time} | server‑proc: ${data.processing_ms.toFixed(2)} ms`;
+        `RTT: ${rtt} ms | server: ${data.server_time}`;
       resultsDiv.prepend(line);
     }
 
     btn.addEventListener('click', pingServer);
-    setInterval(pingServer, 5000);              // auto‑ping every 5 s
+    setInterval(pingServer, 5000);              // auto‑ping every 5s
   </script>
 </body>
 </html>
