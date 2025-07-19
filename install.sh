@@ -18,7 +18,10 @@ LOG_FILE="${LOG_DIR}/${APP_NAME}.log"
 
 echo "➤ Installing python3-venv (if needed)…"
 sudo apt-get update -qq
-sudo apt-get install -y python3 python3-venv
+sudo apt-get install -y python3 python3-venv redis-server
+
+echo "➤ Enabling & starting Redis …"
+sudo systemctl enable --now redis-server
 
 if [[ ! -d "$REPO_DIR/$VENV_DIR" ]]; then
   echo "➤ Creating virtualenv $VENV_DIR …"
