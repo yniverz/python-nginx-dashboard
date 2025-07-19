@@ -273,6 +273,12 @@ class AutoFRPManager:
     def update_server(self, server: FRPServer):
         self.datastore.servers = [s for s in self.datastore.servers if s.id != server.id]
         self.datastore.servers.append(server)
+
+        # Update all clients that use this server
+        for client in self.datastore.clients:
+            if client.server.id == server.id:
+                client.server = server
+
         self.save_config()
 
     def remove_server(self, server_id: str):
