@@ -8,7 +8,7 @@ import uuid
 from flask_wtf import CSRFProtect
 import redis
 import waitress
-from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, redirect, render_template, request, session, url_for
 from core.autofrp import AutoFRPManager, FRPSWebserver, FRPServer, FRPClient, FRPConnection
 from core.nginx import NginxConfigManager, ProxyTarget
 from flask_limiter import Limiter
@@ -79,6 +79,7 @@ class ProxyManager:
         self.app.errorhandler(405)(self.standard_error)
 
         self.app.add_url_rule('/', 'index', self.index)
+        self.app.add_url_rule('/ping', 'ping', self.ping, methods=['GET'])
         self.app.add_url_rule('/login', 'login', self.login, methods=['GET', 'POST'])
         self.app.add_url_rule('/logout', 'logout', self.logout)
         # self.app.add_url_rule('/keys', 'keys', self.get_keys, methods=['GET'])
@@ -117,30 +118,21 @@ class ProxyManager:
 
         # return render_template("404.html"), 404
         return render_template("status_code.jinja", status_code=404), 404
+    
+    def ping(self):
+        if request.args.get('ping') is not None:
+            return Response(
+                json.dumps({
+                    "status": "pong",
+                    "server_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                }),
+                mimetype='application/json'
+            )
+        
+        return render_template("ping.jinja")
 
-    def get_logs(self):
-        if not session.get('logged_in'):
-            return abort(404)
 
-        key_set = request.args.get('key') != None
-        logType = request.args.get('type')
 
-        if logType == "access":
-            logFile = "/var/log/nginx/access.log"
-        elif logType == "stream":
-            logFile = "/var/log/nginx/stream.log"
-        else:
-            return render_template("select_logs.jinja", application_root=self.app.config['APPLICATION_ROOT'])
-
-        with open(logFile, "r") as f:
-            lines = f.readlines()
-
-        if key_set:
-            return "\n".join(lines)
-
-        lines = lines[::-1]
-
-        return render_template("logs.jinja", application_root=self.app.config['APPLICATION_ROOT'], logType=logType.upper(), lines=lines)
 
     # def get_keys(self):
     #     key = request.args.get('key')
@@ -174,7 +166,6 @@ class ProxyManager:
 
         return render_template("login.jinja")
 
-
     def logout(self):
         session.pop('logged_in', None)
         flash('Logged out successfully', 'success')
@@ -191,6 +182,31 @@ class ProxyManager:
                                gateway_connection_list=self.frp_manager.get_connection_list(), 
                                domain=self.nginx_manager.domain, 
                                application_root=self.app.config['APPLICATION_ROOT'])
+
+    def get_logs(self):
+        if not session.get('logged_in'):
+            return abort(404)
+
+        key_set = request.args.get('key') != None
+        logType = request.args.get('type')
+
+        if logType == "access":
+            logFile = "/var/log/nginx/access.log"
+        elif logType == "stream":
+            logFile = "/var/log/nginx/stream.log"
+        else:
+            return render_template("select_logs.jinja", application_root=self.app.config['APPLICATION_ROOT'])
+
+        with open(logFile, "r") as f:
+            lines = f.readlines()
+
+        if key_set:
+            return "\n".join(lines)
+
+        lines = lines[::-1]
+
+        return render_template("logs.jinja", application_root=self.app.config['APPLICATION_ROOT'], logType=logType.upper(), lines=lines)
+
 
 
 

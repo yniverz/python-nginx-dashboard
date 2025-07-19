@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ping Test</title>
+  <style>
+      body {font-family: sans-serif; max-width: 600px; margin: 2rem auto;}
+      #results p {margin: .25rem 0;}
+  </style>
+</head>
+<body>
+  <h1>Ping Test</h1>
+  <button id="pingBtn">Ping server</button>
+  <div id="results"></div>
+
+  <script>
+    const btn = document.getElementById('pingBtn');
+    const resultsDiv = document.getElementById('results');
+
+    async function pingServer() {
+      const start = performance.now();          // client‑side start
+      const res   = await fetch('?ping');   // hit backend
+      const data  = await res.json();
+      const end   = performance.now();          // client‑side end
+
+      const rtt = (end - start).toFixed(2);     // round‑trip (ms)
+      const line = document.createElement('p');
+      line.textContent =
+        `RTT: ${rtt} ms | server: ${data.server_time} | server‑proc: ${data.processing_ms.toFixed(2)} ms`;
+      resultsDiv.prepend(line);
+    }
+
+    btn.addEventListener('click', pingServer);
+    setInterval(pingServer, 5000);              // auto‑ping every 5 s
+  </script>
+</body>
+</html>
