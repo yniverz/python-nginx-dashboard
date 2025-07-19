@@ -8,21 +8,21 @@ A lightweight wsgi web dashboard to configure and manage NginX Proxy configurati
 - Add, edit, and remove HTTP and stream routes dynamically.
 - Manage Cloudflare SRV records for stream services.
 - Reload NginX configurations seamlessly.
-- Secure authentication for access.
 - Simple and intuitive UI.
 
 ## Installation
 
 1. Clone this repository:
-   ```sh
-   git clone https://github.com/yniverz/python-nginx-dashboard
-   cd python-nginx-dashboard
-   ```
+```sh
+git clone https://github.com/yniverz/python-nginx-dashboard
+cd python-nginx-dashboard
+```
 
-2. Install dependencies:
-   ```sh
-   pip install -r requirements.txt
-   ```
+2. Install Service:
+```sh
+./install.sh
+```
+>**Note:** This script installs the required dependencies and sets up a virtual environment and redis. BUT The main application will still be located in the cloned repository directory, so be sure to keep it there.
 
 3. Configure `config.json` with your domain and credentials.
 
@@ -30,6 +30,7 @@ A lightweight wsgi web dashboard to configure and manage NginX Proxy configurati
 
 Create a `config.json` file in the root directory with the following structure:
 - `domain`: The domain name of the server.
+- `check_domains`: A list of domains to check for ip changes (for dynamic DNS).
 - `application_root`: The root web path of the application behind a possible proxy. Default is `/`.
 - `proxy_map_file`: The file to store the proxy map configurations. Default is `proxy_map.json`. Will be created if not found.
 - `username`: The username for web authentication.
@@ -40,6 +41,10 @@ Create a `config.json` file in the root directory with the following structure:
 ```json
 {
     "domain": "domain.tld",
+    "check_domains": [
+        "dyndns.domain.tld",
+        "another.domain.tld"
+    ],
     "application_root": "/",
     "proxy_map_file": "proxy_map.json",
     "username": "username",
@@ -54,9 +59,11 @@ Create a `config.json` file in the root directory with the following structure:
 
 ## Usage
 
-Run the dashboard:
+The application will run deamonized in the background once installed. You can start, stop, or restart the service using:
 ```sh
-python -m core
+sudo systemctl start python-nginx-dashboard
+sudo systemctl stop python-nginx-dashboard
+sudo systemctl restart python-nginx-dashboard
 ```
 
 The web interface will be available at `http://127.0.0.1:8080`.
@@ -64,25 +71,8 @@ The web interface will be available at `http://127.0.0.1:8080`.
 
 ## certbot
 
+There is a handy script to automatically create a certificate for the domain using certbot. This will seamlessly integrate with the NginX configuration. Just run the following command:
 ```sh
-sudo apt update
-sudo apt install python3-certbot-dns-cloudflare
+./cert.sh
 ```
-
-~/.secrets/certbot/cloudflare.ini:
-```
-dns_cloudflare_api_token = 0123456789abcdef0123456789abcdef01234567
-```
-
-```sh
-sudo chmod 600 ~/.secrets/certbot/cloudflare.ini
-
-sudo certbot certonly \
-  --dns-cloudflare \
-  --dns-cloudflare-credentials ~/.secrets/certbot/cloudflare.ini \
-  --dns-cloudflare-propagation-seconds 60 \
-  -d example.com \
-  -d '*.example.com'
-
-sudo certbot renew --dry-run
-```
+This will prompt you for the domain and some other necessary info, and then create the certificate.

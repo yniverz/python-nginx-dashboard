@@ -1,6 +1,6 @@
 {
     "domain": "your.domain",
-    "check_domain": "dyndns.domain",
+    "check_domains": "dyndns.domain",
     "application_root": "/proxy",
     "proxy_map_file": "proxy_map.json",
     "gateway_proxy_map_file": "gateway_proxy_map.json",
