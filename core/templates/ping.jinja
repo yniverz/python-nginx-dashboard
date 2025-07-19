@@ -4,34 +4,72 @@
   <meta charset="utf-8">
   <title>Ping Test</title>
   <style>
-      body {font-family: sans-serif; max-width: 600px; margin: 2rem auto;}
-      #results p {margin: .25rem 0;}
+    body        { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
+    #stats span { display: inline-block; min-width: 6rem; }
+    #status     { margin-top: 1rem; color: green; }
   </style>
 </head>
 <body>
   <h1>Ping Test</h1>
-  <button id="pingBtn">Ping server</button>
-  <div id="results"></div>
+
+  <button id="startBtn">Start test</button>
+  <div id="status"></div>
+
+  <h2>Results</h2>
+  <div id="stats">
+    <p><span>Current:</span> <strong id="cur">—</strong> ms</p>
+    <p><span>Min:</span>     <strong id="min">—</strong> ms</p>
+    <p><span>Max:</span>     <strong id="max">—</strong> ms</p>
+    <p><span>Avg:</span>     <strong id="avg">—</strong> ms</p>
+  </div>
 
   <script>
-    const btn = document.getElementById('pingBtn');
-    const resultsDiv = document.getElementById('results');
+    const startBtn = document.getElementById('startBtn');
+    const curEl = document.getElementById('cur');
+    const minEl = document.getElementById('min');
+    const maxEl = document.getElementById('max');
+    const avgEl = document.getElementById('avg');
+    const status = document.getElementById('status');
 
-    async function pingServer() {
-      const start = performance.now();          // client‑side start
-      const res   = await fetch('?ping');   // hit backend
-      const data  = await res.json();
-      const end   = performance.now();          // client‑side end
+    let timerId     = null;
+    let count       = 0;
+    let sum         = 0;
+    let minRTT      = Infinity;
+    let maxRTT      = 0;
 
-      const rtt = (end - start).toFixed(2);     // round‑trip (ms)
-      const line = document.createElement('p');
-      line.textContent =
-        `RTT: ${rtt} ms | server: ${data.server_time}`;
-      resultsDiv.prepend(line);
+    async function ping() {
+      const t0 = performance.now();
+      try {
+        const res  = await fetch('?ping', { cache: 'no-store' });
+        await res.json(); // we only care about timing, not payload
+        const t1 = performance.now();
+        const rtt = t1 - t0;
+
+        // update stats
+        count += 1;
+        sum   += rtt;
+        minRTT = Math.min(minRTT, rtt);
+        maxRTT = Math.max(maxRTT, rtt);
+
+        // write to DOM (toFixed gives 2 decimals)
+        curEl.textContent = rtt.toFixed(2);
+        minEl.textContent = minRTT.toFixed(2);
+        maxEl.textContent = maxRTT.toFixed(2);
+        avgEl.textContent = (sum / count).toFixed(2);
+      } catch (err) {
+        status.textContent = 'Ping failed - check network or backend';
+        status.style.color = 'red';
+        clearInterval(timerId);
+      }
     }
 
-    btn.addEventListener('click', pingServer);
-    setInterval(pingServer, 5000);              // auto‑ping every 5s
+    startBtn.addEventListener('click', () => {
+      if (timerId) return;               // already running
+      status.textContent = 'Running…';
+      startBtn.disabled  = true;
+      ping();                            // immediate first hit
+      timerId = setInterval(ping, 500);  // then every 500 ms
+    });
   </script>
 </body>
 </html>
