@@ -7,7 +7,7 @@
     body        { font-family: sans-serif; max-width: 640px; margin: 2rem auto; }
     #stats span { display: inline-block; min-width: 6rem; }
     #status     { margin-top: 1rem; color: green; }
-    canvas      { margin-top: 1.5rem; background: #fafafa; border: 1px solid #ddd; }
+    canvas      { margin-top: 1.5rem; background:#fafafa; border:1px solid #ddd; }
   </style>
 </head>
 <body>
@@ -28,45 +28,95 @@
   <canvas id="ruler" width="600" height="80"></canvas>
 
   <script>
+    /* ---------- DOM handles ---------- */
     const startBtn = document.getElementById('startBtn');
-    const curEl  = document.getElementById('cur');
-    const minEl  = document.getElementById('min');
-    const maxEl  = document.getElementById('max');
-    const avgEl  = document.getElementById('avg');
-    const status = document.getElementById('status');
+    const curEl    = document.getElementById('cur');
+    const minEl    = document.getElementById('min');
+    const maxEl    = document.getElementById('max');
+    const avgEl    = document.getElementById('avg');
+    const status   = document.getElementById('status');
 
+    /* ---------- canvas setup ---------- */
     const canvas = document.getElementById('ruler');
     const ctx    = canvas.getContext('2d');
-    const pad    = 40;      // left/right padding for the line
-    const baseY  = 40;      // y‑coordinate of the horizontal line
+    const pad    = 40;   // left/right padding
+    const baseY  = 40;   // y‑coord of baseline
 
-    let timerId = null;
-    let count   = 0, sum = 0;
-    let minRTT  = Infinity, maxRTT = 0;
+    /* ---------- state ---------- */
+    let timerId   = null;
+    let count     = 0, sum = 0;
+    let minRTT    = Infinity, maxRTT = 0;
 
+    let initMin   = null, initMax = null;       // baseline scale
+    let baselineDrawn = false;
+
+    /* ---------- drawing helpers ---------- */
+    function drawBaseline() {
+      // horizontal line
+      ctx.beginPath();
+      ctx.moveTo(pad, baseY);
+      ctx.lineTo(canvas.width - pad, baseY);
+      ctx.strokeStyle = '#000';
+      ctx.stroke();
+
+      // labels
+      ctx.fillText(initMin.toFixed(2), pad - 15, baseY + 20);
+      ctx.fillText(initMax.toFixed(2), canvas.width - pad - 25, baseY + 20);
+
+      baselineDrawn = true;
+    }
+
+    function xPos(value) {
+      const span = initMax - initMin;
+      return pad + (value - initMin) * ((canvas.width - 2 * pad) / span);
+    }
+
+    function tick(x, color, alpha = 1) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x, baseY - 12);
+      ctx.lineTo(x, baseY + 12);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /* ---------- ping loop ---------- */
     async function ping() {
       const t0 = performance.now();
       try {
-        const res = await fetch('?ping', { cache:'no-store' });
+        const res = await fetch('?ping', { cache: 'no-store' });
         await res.json();
-        const t1  = performance.now();
-        const rtt = t1 - t0;
+        const rtt = performance.now() - t0;
 
-        // update aggregates
-        count += 1;
-        sum   += rtt;
-        minRTT = Math.min(minRTT, rtt);
-        maxRTT = Math.max(maxRTT, rtt);
+        /* --- update aggregates --- */
+        count  += 1;
+        sum    += rtt;
+        minRTT  = Math.min(minRTT, rtt);
+        maxRTT  = Math.max(maxRTT, rtt);
+        const avg = sum / count;
 
-        // numbers
+        /* --- numbers on page --- */
         curEl.textContent = rtt.toFixed(2);
         minEl.textContent = minRTT.toFixed(2);
         maxEl.textContent = maxRTT.toFixed(2);
-        const avg = sum / count;
         avgEl.textContent = avg.toFixed(2);
 
-        // redraw canvas
-        drawRuler(rtt, avg);
+        /* --- canvas --- */
+        // lock baseline scale at first full min/max
+        if (!baselineDrawn && minRTT !== maxRTT) {
+          initMin = minRTT;
+          initMax = maxRTT;
+          drawBaseline();
+        }
+        if (!baselineDrawn) return; // still waiting for span
+
+        // draw current tick – semi‑transparent black
+        tick(xPos(rtt), '#000000', 0.25);
+
+        // draw average tick – solid blue
+        tick(xPos(avg), '#007bff', 1);
       } catch (err) {
         status.textContent = 'Ping failed – check network or backend';
         status.style.color = 'red';
@@ -74,48 +124,13 @@
       }
     }
 
-    function drawRuler(curr, avg) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (minRTT === Infinity || minRTT === maxRTT) return; // not enough data yet
-
-      const span = maxRTT - minRTT;
-      const scale = (canvas.width - 2*pad) / span;
-
-      // horizontal base line
-      ctx.beginPath();
-      ctx.moveTo(pad, baseY);
-      ctx.lineTo(canvas.width - pad, baseY);
-      ctx.stroke();
-
-      // min / max labels
-      ctx.fillText(minRTT.toFixed(2), pad - 15, baseY + 20);
-      ctx.fillText(maxRTT.toFixed(2), canvas.width - pad - 25, baseY + 20);
-
-      // helper to draw one tick
-      function tick(x, color) {
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.moveTo(x, baseY - 12);
-        ctx.lineTo(x, baseY + 12);
-        ctx.stroke();
-        ctx.strokeStyle = 'black'; // reset for next primitives
-      }
-
-      // positions
-      const xCurr = pad + (curr - minRTT) * scale;
-      const xAvg  = pad + (avg  - minRTT) * scale;
-
-      tick(xAvg,  '#007bff'); // average – blue
-      tick(xCurr, '#ff0000'); // current – red
-    }
-
+    /* ---------- start button ---------- */
     startBtn.addEventListener('click', () => {
-      if (timerId) return;                  // already running
+      if (timerId) return;                // already running
       status.textContent = 'Running…';
       startBtn.disabled  = true;
-      ping();                               // first hit now
-      timerId = setInterval(ping, 500);     // then every 500 ms
+      ping();                             // immediate first hit
+      timerId = setInterval(ping, 500);   // then every 500 ms
     });
   </script>
 </body>
