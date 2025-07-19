@@ -68,7 +68,7 @@
       status.textContent = 'Running…';
       startBtn.disabled  = true;
       ping();                            // immediate first hit
-      timerId = setInterval(ping, 500);  // then every 500 ms
+      timerId = setInterval(ping, 100);  // then every 500 ms
     });
   </script>
 </body>
