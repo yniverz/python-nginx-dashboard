@@ -7,6 +7,7 @@ A lightweight wsgi web dashboard to configure and manage NginX Proxy configurati
 ## Features
 - Add, edit, and remove HTTP and stream routes dynamically.
 - Manage Cloudflare SRV records for stream services.
+- Manage [Auto FRP](https://github.com/yniverz/auto-frp) servers and clients.
 - Reload NginX configurations seamlessly.
 - Simple and intuitive UI.
 
