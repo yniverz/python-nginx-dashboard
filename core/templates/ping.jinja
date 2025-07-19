@@ -24,7 +24,6 @@
     <p><span>Avg:</span>     <strong id="avg">—</strong> ms</p>
   </div>
 
-  <!-- ruler canvas -->
   <canvas id="ruler" width="600" height="80"></canvas>
 
   <script>
@@ -36,41 +35,18 @@
     const avgEl    = document.getElementById('avg');
     const status   = document.getElementById('status');
 
-    /* ---------- canvas setup ---------- */
+    /* ---------- canvas ---------- */
     const canvas = document.getElementById('ruler');
     const ctx    = canvas.getContext('2d');
-    const pad    = 40;   // left/right padding
-    const baseY  = 40;   // y‑coord of baseline
+    const pad    = 40;             // left / right padding
+    const baseY  = 40;             // y‑coord of baseline
+    const MAX_SAMPLES = 1000;      // keep last N samples
 
     /* ---------- state ---------- */
-    let timerId   = null;
-    let count     = 0, sum = 0;
-    let minRTT    = Infinity, maxRTT = 0;
+    const samples = [];            // RTT history
+    let timerId = null;
 
-    let initMin   = null, initMax = null;       // baseline scale
-    let baselineDrawn = false;
-
-    /* ---------- drawing helpers ---------- */
-    function drawBaseline() {
-      // horizontal line
-      ctx.beginPath();
-      ctx.moveTo(pad, baseY);
-      ctx.lineTo(canvas.width - pad, baseY);
-      ctx.strokeStyle = '#000';
-      ctx.stroke();
-
-      // labels
-      ctx.fillText(initMin.toFixed(2), pad - 15, baseY + 20);
-      ctx.fillText(initMax.toFixed(2), canvas.width - pad - 25, baseY + 20);
-
-      baselineDrawn = true;
-    }
-
-    function xPos(value) {
-      const span = initMax - initMin;
-      return pad + (value - initMin) * ((canvas.width - 2 * pad) / span);
-    }
-
+    /* ---------- helpers ---------- */
     function tick(x, color, alpha = 1) {
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -82,6 +58,41 @@
       ctx.restore();
     }
 
+    function drawChart() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (samples.length < 2) return;  // need span
+
+      const min = Math.min(...samples);
+      const max = Math.max(...samples);
+      const span = max - min || 1;               // avoid div‑by‑zero
+      const scale = (canvas.width - 2*pad) / span;
+      const xPos  = v => pad + (v - min) * scale;
+      const avg   = samples.reduce((a, b) => a + b, 0) / samples.length;
+
+      /* ---- baseline & labels ---- */
+      ctx.strokeStyle = '#000';
+      ctx.beginPath();
+      ctx.moveTo(pad, baseY);
+      ctx.lineTo(canvas.width - pad, baseY);
+      ctx.stroke();
+      ctx.fillStyle = '#000';
+      ctx.fillText(min.toFixed(2), pad - 15, baseY + 20);
+      ctx.fillText(max.toFixed(2), canvas.width - pad - 25, baseY + 20);
+
+      /* ---- historical ticks ---- */
+      samples.forEach(v => tick(xPos(v), '#000', 0.25));
+
+      /* ---- average tick ---- */
+      tick(xPos(avg), '#007bff', 1);
+
+      /* ---- numbers above canvas ---- */
+      curEl.textContent = samples[samples.length - 1].toFixed(2);
+      minEl.textContent = min.toFixed(2);
+      maxEl.textContent = max.toFixed(2);
+      avgEl.textContent = avg.toFixed(2);
+    }
+
     /* ---------- ping loop ---------- */
     async function ping() {
       const t0 = performance.now();
@@ -90,46 +101,23 @@
         await res.json();
         const rtt = performance.now() - t0;
 
-        /* --- update aggregates --- */
-        count  += 1;
-        sum    += rtt;
-        minRTT  = Math.min(minRTT, rtt);
-        maxRTT  = Math.max(maxRTT, rtt);
-        const avg = sum / count;
+        samples.push(rtt);
+        if (samples.length > MAX_SAMPLES) samples.shift();  // drop oldest
 
-        /* --- numbers on page --- */
-        curEl.textContent = rtt.toFixed(2);
-        minEl.textContent = minRTT.toFixed(2);
-        maxEl.textContent = maxRTT.toFixed(2);
-        avgEl.textContent = avg.toFixed(2);
-
-        /* --- canvas --- */
-        // lock baseline scale at first full min/max
-        if (!baselineDrawn && minRTT !== maxRTT) {
-          initMin = minRTT;
-          initMax = maxRTT;
-          drawBaseline();
-        }
-        if (!baselineDrawn) return; // still waiting for span
-
-        // draw current tick – semi‑transparent black
-        tick(xPos(rtt), '#000000', 0.25);
-
-        // draw average tick – solid blue
-        tick(xPos(avg), '#007bff', 1);
-      } catch (err) {
+        drawChart();
+      } catch {
         status.textContent = 'Ping failed – check network or backend';
         status.style.color = 'red';
         clearInterval(timerId);
       }
     }
 
-    /* ---------- start button ---------- */
+    /* ---------- start ---------- */
     startBtn.addEventListener('click', () => {
       if (timerId) return;                // already running
       status.textContent = 'Running…';
       startBtn.disabled  = true;
-      ping();                             // immediate first hit
+      ping();                             // first sample immediately
       timerId = setInterval(ping, 500);   // then every 500 ms
     });
   </script>
