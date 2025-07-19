@@ -4,9 +4,10 @@
   <meta charset="utf-8">
   <title>Ping Test</title>
   <style>
-    body        { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
+    body        { font-family: sans-serif; max-width: 640px; margin: 2rem auto; }
     #stats span { display: inline-block; min-width: 6rem; }
     #status     { margin-top: 1rem; color: green; }
+    canvas      { margin-top: 1.5rem; background: #fafafa; border: 1px solid #ddd; }
   </style>
 </head>
 <body>
@@ -17,58 +18,104 @@
 
   <h2>Results</h2>
   <div id="stats">
-    <p><span>Current:</span> <strong id="cur">—</strong> ms</p>
-    <p><span>Min:</span>     <strong id="min">—</strong> ms</p>
-    <p><span>Max:</span>     <strong id="max">—</strong> ms</p>
-    <p><span>Avg:</span>     <strong id="avg">—</strong> ms</p>
+    <p><span>Current:</span> <strong id="cur">—</strong> ms</p>
+    <p><span>Min:</span>     <strong id="min">—</strong> ms</p>
+    <p><span>Max:</span>     <strong id="max">—</strong> ms</p>
+    <p><span>Avg:</span>     <strong id="avg">—</strong> ms</p>
   </div>
+
+  <!-- ruler canvas -->
+  <canvas id="ruler" width="600" height="80"></canvas>
 
   <script>
     const startBtn = document.getElementById('startBtn');
-    const curEl = document.getElementById('cur');
-    const minEl = document.getElementById('min');
-    const maxEl = document.getElementById('max');
-    const avgEl = document.getElementById('avg');
+    const curEl  = document.getElementById('cur');
+    const minEl  = document.getElementById('min');
+    const maxEl  = document.getElementById('max');
+    const avgEl  = document.getElementById('avg');
     const status = document.getElementById('status');
 
-    let timerId     = null;
-    let count       = 0;
-    let sum         = 0;
-    let minRTT      = Infinity;
-    let maxRTT      = 0;
+    const canvas = document.getElementById('ruler');
+    const ctx    = canvas.getContext('2d');
+    const pad    = 40;      // left/right padding for the line
+    const baseY  = 40;      // y‑coordinate of the horizontal line
+
+    let timerId = null;
+    let count   = 0, sum = 0;
+    let minRTT  = Infinity, maxRTT = 0;
 
     async function ping() {
       const t0 = performance.now();
       try {
-        const res  = await fetch('?ping', { cache: 'no-store' });
-        await res.json(); // we only care about timing, not payload
-        const t1 = performance.now();
+        const res = await fetch('?ping', { cache:'no-store' });
+        await res.json();
+        const t1  = performance.now();
         const rtt = t1 - t0;
 
-        // update stats
+        // update aggregates
         count += 1;
         sum   += rtt;
         minRTT = Math.min(minRTT, rtt);
         maxRTT = Math.max(maxRTT, rtt);
 
-        // write to DOM (toFixed gives 2 decimals)
+        // numbers
         curEl.textContent = rtt.toFixed(2);
         minEl.textContent = minRTT.toFixed(2);
         maxEl.textContent = maxRTT.toFixed(2);
-        avgEl.textContent = (sum / count).toFixed(2);
+        const avg = sum / count;
+        avgEl.textContent = avg.toFixed(2);
+
+        // redraw canvas
+        drawRuler(rtt, avg);
       } catch (err) {
-        status.textContent = 'Ping failed - check network or backend';
+        status.textContent = 'Ping failed – check network or backend';
         status.style.color = 'red';
         clearInterval(timerId);
       }
     }
 
+    function drawRuler(curr, avg) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (minRTT === Infinity || minRTT === maxRTT) return; // not enough data yet
+
+      const span = maxRTT - minRTT;
+      const scale = (canvas.width - 2*pad) / span;
+
+      // horizontal base line
+      ctx.beginPath();
+      ctx.moveTo(pad, baseY);
+      ctx.lineTo(canvas.width - pad, baseY);
+      ctx.stroke();
+
+      // min / max labels
+      ctx.fillText(minRTT.toFixed(2), pad - 15, baseY + 20);
+      ctx.fillText(maxRTT.toFixed(2), canvas.width - pad - 25, baseY + 20);
+
+      // helper to draw one tick
+      function tick(x, color) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.moveTo(x, baseY - 12);
+        ctx.lineTo(x, baseY + 12);
+        ctx.stroke();
+        ctx.strokeStyle = 'black'; // reset for next primitives
+      }
+
+      // positions
+      const xCurr = pad + (curr - minRTT) * scale;
+      const xAvg  = pad + (avg  - minRTT) * scale;
+
+      tick(xAvg,  '#007bff'); // average – blue
+      tick(xCurr, '#ff0000'); // current – red
+    }
+
     startBtn.addEventListener('click', () => {
-      if (timerId) return;               // already running
+      if (timerId) return;                  // already running
       status.textContent = 'Running…';
       startBtn.disabled  = true;
-      ping();                            // immediate first hit
-      timerId = setInterval(ping, 100);  // then every 500 ms
+      ping();                               // first hit now
+      timerId = setInterval(ping, 500);     // then every 500 ms
     });
   </script>
 </body>
