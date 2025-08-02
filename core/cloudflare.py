@@ -160,85 +160,177 @@ def _fetch_cidr_list(url: str) -> list[str]:
 
 class CloudFlareWildcardManager:
     """
-    Ensures that every “first-label” wildcard has ONE record for
-    every IP specified in origin_ips.
+    Make sure Cloudflare holds exactly the wildcard A/AAAA records we need:
+
+    ─ A **root wildcard  *.domain**          if at least one depth-1 host exists.
+    ─ A **label wildcard *.label.domain**    if at least one host is deeper
+                                             than   <anything>.<label>.<domain>.
+
+    Each wildcard points to *all* IPs given in `origin_ips` (v4 and/or v6).
+    Stray IPs are removed so DNS never advertises back-end addresses
+    that are no longer listed in the config file.
     """
 
+    # ------------------------------------------------------------
     def __init__(self, cf: cloudflare.Cloudflare, zone_id: str, domain: str):
-        self.cf, self.zone_id, self.domain = cf, zone_id, domain
+        self.cf = cf
+        self.zone_id = zone_id
+        self.domain = domain
 
-    # --------------------------------------------------------------
-    def sync_wildcards(self, proxy_map: dict, origin_ips: list[str],
-                       proxied: bool = True, ttl: int = 1) -> None:
-        want_labels = self._first_labels_from_map(proxy_map)
-        have        = self._records_by_label()
+    # ------------------------------------------------------------
+    #  PUBLIC entry-point
+    # ------------------------------------------------------------
+    def sync_wildcards(
+        self,
+        proxy_map: dict,
+        origin_ips: list[str],
+        *,
+        proxied: bool = True,
+        ttl: int = 1,
+    ) -> None:
+        """Synchronise DNS with the dashboard state."""
 
-        # classify IPs by version once
+        want_labels: set[str] = self._first_labels_requiring_wildcard(proxy_map)
+        have: dict[str, dict] = self._records_by_label()
+
         want_v4 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 4}
         want_v6 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 6}
 
         for label in want_labels:
-            fqdn = f"*.{label}.{self.domain}"
+            fqdn = f"*.{self.domain}" if label == "" else f"*.{label}.{self.domain}"
+            have_entry = have.get(label, {"A": set(), "AAAA": set(), "map": {}})
 
-            # ---------- IPv4 ----------
+            # ---- IPv4 ---------------------------------------------------
             self._ensure_records(
-                fqdn, "A",
-                want_set = want_v4,
-                have_set = have[label]["A"],
-                proxied=proxied, ttl=ttl)
+                label,
+                fqdn,
+                rtype="A",
+                want_set=want_v4,
+                have_entry=have_entry,
+                proxied=proxied,
+                ttl=ttl,
+            )
 
-            # ---------- IPv6 ----------
+            # ---- IPv6 ---------------------------------------------------
             if want_v6:
                 self._ensure_records(
-                    fqdn, "AAAA",
-                    want_set = want_v6,
-                    have_set = have[label]["AAAA"],
-                    proxied=proxied, ttl=ttl)
+                    label,
+                    fqdn,
+                    rtype="AAAA",
+                    want_set=want_v6,
+                    have_entry=have_entry,
+                    proxied=proxied,
+                    ttl=ttl,
+                )
 
-    # -------------------------------------------------------------- helpers
-    def _first_labels_from_map(self, proxy_map: dict) -> set[str]:
-        labels = set()
+        # ---- remove *whole* label wildcards that are not wanted anymore ----
+        for obsolete in (have.keys() - want_labels):
+            fqdn = f"*.{self.domain}" if obsolete == "" else f"*.{obsolete}.{self.domain}"
+            for (rtype, ip), rec_id in have[obsolete]["map"].items():
+                self.cf.dns.records.delete(
+                    zone_id=self.zone_id,
+                    dns_record_id=rec_id,
+                )
+                print(f"Removed unneeded {rtype} {fqdn} → {ip}")
+
+    # ------------------------------------------------------------
+    #  HELPERS
+    # ------------------------------------------------------------
+    def _first_labels_requiring_wildcard(self, proxy_map: dict) -> set[str]:
+        """
+        Decide which labels really need a wildcard:
+
+        * add "" (root) if **any** depth-1 host exists (foo.domain).
+        * add last label when depth ≥ 2   (hello.static.domain -> "static").
+        """
+        labels: set[str] = set()
+        root_needed = False
+
         for kind in ("http", "stream"):
             for sub in proxy_map.get(kind, {}):
                 if sub in ("@", ""):
-                    continue
-                labels.add(sub.split(".")[-1])
+                    continue  # explicit root entry – ignore
+
+                parts = sub.split(".")
+                if len(parts) >= 1:
+                    root_needed = True             # depth-1 host: keep *.domain
+                if len(parts) >= 2:
+                    labels.add(parts[-1])           # need *.label.domain
+
+        if root_needed:
+            labels.add("")                          # ""  represents root wildcard
+
         return labels
 
+    # ------------------------------------------------------------------
     def _records_by_label(self) -> dict[str, dict[str, set[str]]]:
         """
-        { label : {"A": {ip,…}, "AAAA": {ip,…}, "map": { (type,ip):rec_id } } }
+        Build a lookup of existing wildcard records.
+
+        Returns
+        -------
+        {
+          "":        {"A": {ip,…}, "AAAA": {ip,…}, "map": {(rtype, ip): rec_id}},
+          "static":  {...},
+          ...
+        }
         """
-        out = defaultdict(lambda: {"A": set(), "AAAA": set(), "map": {}})
+        out: dict[str, dict] = defaultdict(
+            lambda: {"A": set(), "AAAA": set(), "map": {}}
+        )
         suffix = f".{self.domain}"
 
         for rec in self.cf.dns.records.list(zone_id=self.zone_id, per_page=5000):
-            if rec.type not in ("A", "AAAA"):
+            if rec["type"] not in ("A", "AAAA"):
                 continue
-            if not rec.name.startswith("*.") or not rec.name.endswith(suffix):
+
+            # recognise "*.domain" (root) or "*.label.domain"
+            if rec["name"] == f"*.{self.domain}":
+                label = ""
+            elif rec["name"].startswith("*.") and rec["name"].endswith(suffix):
+                label = rec["name"][2 : -len(suffix)]
+            else:
                 continue
-            label = rec.name[2:-len(suffix)]          # cut "*." and ".domain"
-            ip    = rec.content
-            out[label][rec.type].add(ip)
-            out[label]["map"][(rec.type, ip)] = rec.id
+
+            ip = rec["content"]
+            out[label][rec["type"]].add(ip)
+            out[label]["map"][(rec["type"], ip)] = rec["id"]
+
         return out
 
-    def _ensure_records(self, fqdn: str, rtype: str,
-                        want_set: set[str], have_set: set[str],
-                        proxied: bool, ttl: int):
+    # ------------------------------------------------------------------
+    def _ensure_records(
+        self,
+        label: str,
+        fqdn: str,
+        *,
+        rtype: str,
+        want_set: set[str],
+        have_entry: dict,
+        proxied: bool,
+        ttl: int,
+    ) -> None:
+        have_set = have_entry[rtype]
         missing = want_set - have_set
-        extra   = have_set - want_set
+        extra = have_set - want_set
 
-        # --- add what’s missing ---
+        # ---- create missing ----
         for ip in missing:
             self.cf.dns.records.create(
-                zone_id=self.zone_id, type=rtype, name=fqdn,
-                content=ip, ttl=ttl, proxied=proxied)
-            print(f"Added {rtype} {fqdn} → {ip}")
+                zone_id=self.zone_id,
+                type=rtype,
+                name=fqdn,
+                content=ip,
+                ttl=ttl,
+                proxied=proxied,
+            )
+            print(f"Added   {rtype:5} {fqdn} → {ip}")
 
-        # --- (optional) remove extras that aren’t in config ---
-        # comment out if you prefer to leave them
+        # ---- delete stale ----
         for ip in extra:
-            rec_id = self._records_by_label()[fqdn.split('.')[1]]["map"][(rtype, ip)]
-            self.cf.dns.records.delete(dns_record_id=rec_id, zone_id=self.zone_id)
-            print(f"Removed stale {rtype} {fqdn} → {ip}")
+            rec_id = have_entry["map"][(rtype, ip)]
+            self.cf.dns.records.delete(
+                zone_id=self.zone_id,
+                dns_record_id=rec_id,
+            )
+            print(f"Removed {rtype:5} {fqdn} → {ip}")
