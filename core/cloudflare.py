@@ -232,7 +232,7 @@ class CloudFlareWildcardManager:
         # --- add what’s missing ---
         for ip in missing:
             self.cf.dns.records.create(
-                self.zone_id, type=rtype, name=fqdn,
+                zone_id=self.zone_id, type=rtype, name=fqdn,
                 content=ip, ttl=ttl, proxied=proxied)
             print(f"Added {rtype} {fqdn} → {ip}")
 
@@ -240,5 +240,5 @@ class CloudFlareWildcardManager:
         # comment out if you prefer to leave them
         for ip in extra:
             rec_id = self._records_by_label()[fqdn.split('.')[1]]["map"][(rtype, ip)]
-            self.cf.dns.records.delete(self.zone_id, rec_id)
+            self.cf.dns.records.delete(dns_record_id=rec_id, zone_id=self.zone_id)
             print(f"Removed stale {rtype} {fqdn} → {ip}")
