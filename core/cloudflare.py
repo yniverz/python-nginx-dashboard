@@ -281,20 +281,20 @@ class CloudFlareWildcardManager:
         suffix = f".{self.domain}"
 
         for rec in self.cf.dns.records.list(zone_id=self.zone_id, per_page=5000):
-            if rec["type"] not in ("A", "AAAA"):
+            if rec.type not in ("A", "AAAA"):
                 continue
 
             # recognise "*.domain" (root) or "*.label.domain"
-            if rec["name"] == f"*.{self.domain}":
+            if rec.name == f"*.{self.domain}":
                 label = ""
-            elif rec["name"].startswith("*.") and rec["name"].endswith(suffix):
-                label = rec["name"][2 : -len(suffix)]
+            elif rec.name.startswith("*.") and rec.name.endswith(suffix):
+                label = rec.name[2 : -len(suffix)]
             else:
                 continue
 
-            ip = rec["content"]
-            out[label][rec["type"]].add(ip)
-            out[label]["map"][(rec["type"], ip)] = rec["id"]
+            ip = rec.content
+            out[label][rec.type].add(ip)
+            out[label]["map"][(rec.type, ip)] = rec.id
 
         return out
 
