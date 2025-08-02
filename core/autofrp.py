@@ -39,7 +39,6 @@ class FRPServer:
 bindPort = {self.bind_port}
 kcpBindPort = {self.bind_port}
 kcp_nodelay   = true
-kcp_fast_mode = true
 
 [auth]
 method = "token"
@@ -101,7 +100,6 @@ serverAddr = "{self.server.host}"
 serverPort = {self.server.bind_port}
 transport.protocol = "kcp"
 kcp_nodelay   = true
-kcp_fast_mode = true
 
 [auth]
 method = "token"
