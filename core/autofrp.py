@@ -40,7 +40,6 @@ bindPort = {self.bind_port}
 kcpBindPort = {self.bind_port}
 kcp_nodelay   = true
 kcp_fast_mode = true
-kcp_check_interval = 10
 
 [auth]
 method = "token"
@@ -103,7 +102,6 @@ serverPort = {self.server.bind_port}
 transport.protocol = "kcp"
 kcp_nodelay   = true
 kcp_fast_mode = true
-kcp_check_interval = 10
 
 [auth]
 method = "token"
