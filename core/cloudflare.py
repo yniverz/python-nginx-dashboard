@@ -212,7 +212,7 @@ class CloudFlareWildcardManager:
         out = defaultdict(lambda: {"A": set(), "AAAA": set(), "map": {}})
         suffix = f".{self.domain}"
 
-        for rec in self.cf.dns.records.list(self.zone_id, per_page=5000):
+        for rec in self.cf.dns.records.list(zone_id=self.zone_id, per_page=5000):
             if rec["type"] not in ("A", "AAAA"):
                 continue
             if not rec["name"].startswith("*.") or not rec["name"].endswith(suffix):
