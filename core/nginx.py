@@ -47,7 +47,7 @@ class NginxConfigManager:
         self.cloudflare_srv_map: list[CloudFlareMapEntry] = []
 
         self.origin_ips = origin_ips
-        self.cf_wildcard_mgr = CloudFlareWildcardManager(self.cf,
+        self.cf_wildcard_mgr = CloudFlareWildcardManager(self.cf.cf,
                                                          self.cf.zone_id,
                                                          self.domain)
 

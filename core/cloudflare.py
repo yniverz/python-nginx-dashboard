@@ -164,7 +164,7 @@ class CloudFlareWildcardManager:
     every IP specified in origin_ips.
     """
 
-    def __init__(self, cf, zone_id: str, domain: str):
+    def __init__(self, cf: cloudflare.Cloudflare, zone_id: str, domain: str):
         self.cf, self.zone_id, self.domain = cf, zone_id, domain
 
     # --------------------------------------------------------------
