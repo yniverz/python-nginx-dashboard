@@ -65,6 +65,7 @@ if __name__ == '__main__':
 
     DOMAIN = config['domain']
     CHECK_DOMAINS = config['check_domains'] if 'check_domains' in config else []
+    ORIGIN_IPS = config.get("origin_ips", [])
     nginx_manager = NginxConfigManager(
         config_path='/etc/nginx/conf.d/'+ DOMAIN + '.conf',
         stream_config_path='/etc/nginx/conf.stream.d/' + DOMAIN + '.conf',
@@ -73,6 +74,7 @@ if __name__ == '__main__':
         ssl_cert_key_path='/etc/letsencrypt/live/' + DOMAIN + '/privkey.pem',
         json_path=config['proxy_map_file'],
         cloudflare_token=config['cloudflare_token'],
+        origin_ips=ORIGIN_IPS,
     )
 
     nginx_manager.reload_nginx()

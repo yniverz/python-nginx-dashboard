@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
 import ipaddress
 import json
@@ -154,3 +155,90 @@ def _fetch_cidr_list(url: str) -> list[str]:
             continue
         cidrs.append(line)
     return cidrs
+
+
+
+class CloudFlareWildcardManager:
+    """
+    Ensures that every “first-label” wildcard has ONE record for
+    every IP specified in origin_ips.
+    """
+
+    def __init__(self, cf, zone_id: str, domain: str):
+        self.cf, self.zone_id, self.domain = cf, zone_id, domain
+
+    # --------------------------------------------------------------
+    def sync_wildcards(self, proxy_map: dict, origin_ips: list[str],
+                       proxied: bool = True, ttl: int = 1) -> None:
+        want_labels = self._first_labels_from_map(proxy_map)
+        have        = self._records_by_label()
+
+        # classify IPs by version once
+        want_v4 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 4}
+        want_v6 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 6}
+
+        for label in want_labels:
+            fqdn = f"*.{label}.{self.domain}"
+
+            # ---------- IPv4 ----------
+            self._ensure_records(
+                fqdn, "A",
+                want_set = want_v4,
+                have_set = have[label]["A"],
+                proxied=proxied, ttl=ttl)
+
+            # ---------- IPv6 ----------
+            if want_v6:
+                self._ensure_records(
+                    fqdn, "AAAA",
+                    want_set = want_v6,
+                    have_set = have[label]["AAAA"],
+                    proxied=proxied, ttl=ttl)
+
+    # -------------------------------------------------------------- helpers
+    def _first_labels_from_map(self, proxy_map: dict) -> set[str]:
+        labels = set()
+        for kind in ("http", "stream"):
+            for sub in proxy_map.get(kind, {}):
+                if sub in ("@", ""):
+                    continue
+                labels.add(sub.split(".")[-1])
+        return labels
+
+    def _records_by_label(self) -> dict[str, dict[str, set[str]]]:
+        """
+        { label : {"A": {ip,…}, "AAAA": {ip,…}, "map": { (type,ip):rec_id } } }
+        """
+        out = defaultdict(lambda: {"A": set(), "AAAA": set(), "map": {}})
+        suffix = f".{self.domain}"
+
+        for rec in self.cf.dns.records.list(self.zone_id, per_page=5000):
+            if rec["type"] not in ("A", "AAAA"):
+                continue
+            if not rec["name"].startswith("*.") or not rec["name"].endswith(suffix):
+                continue
+            label = rec["name"][2:-len(suffix)]          # cut "*." and ".domain"
+            ip    = rec["content"]
+            out[label][rec["type"]].add(ip)
+            out[label]["map"][(rec["type"], ip)] = rec["id"]
+        return out
+
+    def _ensure_records(self, fqdn: str, rtype: str,
+                        want_set: set[str], have_set: set[str],
+                        proxied: bool, ttl: int):
+        missing = want_set - have_set
+        extra   = have_set - want_set
+
+        # --- add what’s missing ---
+        for ip in missing:
+            self.cf.dns.records.create(
+                self.zone_id, type=rtype, name=fqdn,
+                content=ip, ttl=ttl, proxied=proxied)
+            print(f"Added {rtype} {fqdn} → {ip}")
+
+        # --- (optional) remove extras that aren’t in config ---
+        # comment out if you prefer to leave them
+        for ip in extra:
+            rec_id = self._records_by_label()[fqdn.split('.')[1]]["map"][(rtype, ip)]
+            self.cf.dns.records.delete(self.zone_id, rec_id)
+            print(f"Removed stale {rtype} {fqdn} → {ip}")
