@@ -238,10 +238,14 @@ class CloudFlareWildcardManager:
     # ------------------------------------------------------------
     def _first_labels_requiring_wildcard(self, proxy_map: dict) -> set[str]:
         """
-        Decide which labels really need a wildcard:
+        Return every label (possibly containing dots) that needs a wildcard.
 
-        * add "" (root) if **any** depth-1 host exists (foo.domain).
-        * add last label when depth ≥ 2   (hello.static.domain -> "static").
+        For a route 'tower.ve.orgn' we emit:
+            've.orgn'   (because depth-1 below it exists)
+            'orgn'      (because depth-2 below it exists)
+
+        The empty string '' represents the *root* wildcard  *.domain
+        and is added only when at least one depth-1 host (foo.domain) exists.
         """
         labels: set[str] = set()
         root_needed = False
@@ -249,18 +253,22 @@ class CloudFlareWildcardManager:
         for kind in ("http", "stream"):
             for sub in proxy_map.get(kind, {}):
                 if sub in ("@", ""):
-                    continue  # explicit root entry – ignore
+                    continue                          # skip explicit root
 
-                parts = sub.split(".")
-                if len(parts) >= 1:
-                    root_needed = True             # depth-1 host: keep *.domain
-                if len(parts) >= 2:
-                    labels.add(parts[-1])           # need *.label.domain
+                parts = sub.split(".")               # e.g. ['tower','ve','orgn']
+
+                if len(parts) >= 1:                  # depth-1 host ⇒ root wildcard
+                    root_needed = True
+
+                # walk up the chain, add every parent
+                for i in range(1, len(parts)):       # i = 1 … len-1
+                    labels.add(".".join(parts[i:]))
 
         if root_needed:
-            labels.add("")                          # ""  represents root wildcard
+            labels.add("")                           # '' = *.domain
 
         return labels
+
 
     # ------------------------------------------------------------------
     def _records_by_label(self) -> dict[str, dict[str, set[str]]]:
