@@ -7,6 +7,7 @@ A lightweight wsgi web dashboard to configure and manage NginX Proxy configurati
 ## Features
 - Add, edit, and remove HTTP and stream routes dynamically.
 - Manage Cloudflare SRV records for stream services.
+- Manage Cloudflare Origin CA SSL certificates and Edge dns records.
 - Manage [Auto FRP](https://github.com/yniverz/auto-frp) servers and clients.
 - Reload NginX configurations seamlessly.
 - Simple and intuitive UI.
@@ -64,6 +65,15 @@ Create a `config.json` file in the root directory with the following structure:
     ]
 }
 ```
+
+### Cloudflare Configuration
+Make sure to set up your Cloudflare account with the necessary permissions to manage SRV records and SSL certificates. The `cloudflare_token` should have permissions to edit DNS records and manage Origin CA certificates.
+
+Needed Permissions for the api key:
+- **Zone.DNS**: Edit
+- **Zone.SSL and Certificates**: Edit
+
+And you will need to copy the Origin CA certificate and key to the appropriate directory on your server. This can be found at [Dashboard -> Profile -> API Tokens](https://dash.cloudflare.com/profile/api-tokens).
 
 ## Usage
 
