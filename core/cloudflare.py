@@ -434,21 +434,20 @@ class CloudFlareOriginCAManager:
                 break
 
             for c in resp.result:
-                if c["revoked_at"]:
-                    continue
-                hosts = sorted(c["hostnames"])
+                
+                hosts = sorted(c.hostnames)
                 label = (
                     ""
                     if hosts == [self.domain, f"*.{self.domain}"]
                     else hosts[0][2 : -(len(self.domain) + 1)]
                 )
                 out[label] = {
-                    "id":          c["id"],
+                    "id":          c.id,
                     "expires":     datetime.datetime.fromisoformat(
-                                       c["expires_on"].rstrip("Z")
+                                       c.expires_on.rstrip("Z")
                                    ),
-                    "certificate": c["certificate"],
-                    "private_key": c.get("private_key", ""),  # only present on create
+                    "certificate": c.certificate,
+                    "private_key": "",  # only present on create
                 }
 
             # if page >= resp.res["result_info"]["total_pages"]:
