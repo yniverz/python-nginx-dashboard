@@ -71,7 +71,7 @@ class NginxConfigManager:
                                     origin_ips=self.origin_ips)
         
         need_labels = self.cf_wildcard_mgr.current_labels()
-        self.cf_origin_ca.ensure_certs(need_labels)
+        self.cf_origin_ca.sync(need_labels)
     
     def save_to_json(self):
         with open(self.json_path, 'w') as json_file:

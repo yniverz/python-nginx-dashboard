@@ -363,146 +363,183 @@ class CloudFlareWildcardManager:
             print(f"Removed {rtype:5} {fqdn} → {ip}")
 
 
-_CERT_DAYS   = 365 * 5                        # 5 years – max allowed
-_RENEW_SOON  = 30                             # days before expiry → renew
+_CERT_DAYS  = 365 * 5        # 5-year Origin-CA cert
+_RENEW_SOON = 30             # renew if <30 days to expiry
+_SSL_DIR    = Path("/etc/nginx/ssl")
+
 
 class CloudFlareOriginCAManager:
     """
-    • Keeps *exactly one* Origin-CA certificate per wildcard label that Nginx
-      needs (root “*.example.com” plus “*.foo.example.com”, …).
-    • Deletes certificates that no route needs any more.
-    • Writes `fullchain.pem` / `privkey.pem` into /etc/nginx/ssl/<label>/.
+    Keeps one Origin-CA certificate per wildcard label:
+
+        ''          → *.example.com  +  example.com
+        'static'    → *.static.example.com  +  static.example.com
+        've.orgn'   → *.ve.orgn.example.com + ve.orgn.example.com
     """
 
-    def __init__(self, cf: cloudflare.Cloudflare, zone_id: str, domain: str):
-        self.cf       = cf
-        self.zone_id  = zone_id
-        self.domain   = domain                      # “example.com”
+    def __init__(self, cf: cloudflare.Cloudflare, domain: str):
+        self.cf     = cf              # authenticated Cloudflare()
+        self.domain = domain
 
-    # ------------------------------------------------------------------
-    # PUBLIC
-    # ------------------------------------------------------------------
-    def ensure_certs(self, labels: list[str]) -> dict[str, tuple[str, str]]:
+    # ------------------------------------------------------------
+    #  PUBLIC
+    # ------------------------------------------------------------
+    def sync(self, labels: list[str]) -> dict[str, tuple[str, str]]:
         """
-        *labels*  - ['', 'static', 'orgn.ve', …]  ('' means root wildcard)
-
-        Returns {label: (path_to_crt, path_to_key)}
+        Make sure every *label* in `labels` has a fresh Origin-CA cert and
+        revoke anything else. Returns `{label: (crt_path, key_path)}`.
         """
-        existing = self._index_existing()           # {label: {...}}
+        existing = self._index_existing()        # {label: {...}}
         wanted   = set(labels)
 
-        # 1) Create/renew what’s missing/expiring -----------------------
-        result: dict[str, tuple[str, str]] = {}
+        paths: dict[str, tuple[str, str]] = {}
+
+        # create / renew ------------------------------------------------
         for label in wanted:
-            entry = existing.get(label)
-            if entry and not self._expires_soon(entry["expires"]):
-                # fresh enough – just return paths
-                result[label] = self._write_to_disk(label, entry)
+            info = existing.get(label)
+            if info and not self._expiring(info["expires"]):
+                paths[label] = self._write_to_disk(label, info)
                 continue
 
-            # Need new cert (either none or expires soon)
-            hostnames = (
-                [self.domain, f"*.{self.domain}"]
-                if label == ""
-                else [f"{label}.{self.domain}", f"*.{label}.{self.domain}"]
-            )
+            key_p, csr_p = self._ensure_key_and_csr(label)
+            cert = self._upload_csr(label, csr_p.read_text())
+            paths[label] = self._write_to_disk(label, cert, is_new=True)
 
-            cert = self.cf.origin_ca_certificates.create(
-                csr                = cloudflare.NOT_GIVEN,          # → let CF create key
-                hostnames          = hostnames,
-                request_type       = "origin-rsa",
-                requested_validity = _CERT_DAYS,
-            )
+        # revoke obsolete ---------------------------------------------
+        for label in existing.keys() - wanted:
+            self.cf.origin_ca_certificates.delete(existing[label]["id"])
+            print(f"[Origin-CA] revoked {existing[label]['id']} "
+                  f"({label or '*'}.{self.domain})")
 
-            result[label] = self._write_to_disk(label, cert, is_new=True)
+        return paths
 
-            print(f"Created Origin-CA cert for {', '.join(hostnames)} "
-                  f"(id={cert.id})")                # noqa: T201
-
-        # 2) Revoke obsolete certificates --------------------------------
-        obsolete = set(existing) - wanted
-        for label in obsolete:
-            self.cf.origin_ca_certificates.delete(
-                certificate_id= existing[label]["id"],
-            )
-            print(f"Revoked obsolete cert id={existing[label]['id']} "
-                  f"({label or '*'}.{self.domain})")  # noqa: T201
-
-        return result
-
-    # ------------------------------------------------------------------
-    # INTERNAL
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------
+    #  INTERNAL HELPERS
+    # ------------------------------------------------------------
     def _index_existing(self) -> dict[str, dict]:
         """
-        Returns {label: {"id": str, "expires": datetime, "cert": str, "key": str}}
+        Gather non-revoked certs belonging to *this* domain.
         """
         out: dict[str, dict] = {}
         page = 1
         while True:
-            resp = self.cf.origin_ca_certificates.list(
-                zone_id   = self.zone_id,
-                page      = page,
-                per_page  = 100,
-                # direction = "asc",
+            resp = self.cf.origin_ca_certificates.get(
+                params={"page": page, "per_page": 100}
             )
 
-            if len(resp.result) == 0:
-                break
-
-            for cert in resp.result:
-                if cert.revoked_at is not None:
-                    continue                          # ignore revoked
-                hostnames = sorted(cert.hostnames)
+            for c in resp["result"]:
+                if c["revoked_at"]:
+                    continue
+                hosts = sorted(c["hostnames"])
                 label = (
-                    "" if hostnames == [self.domain, f"*.{self.domain}"]
-                    else hostnames[0][2 : -(len(self.domain) + 1)]
-                )                                     # '*.foo.bar.com' → 'foo.bar'
+                    ""
+                    if hosts == [self.domain, f"*.{self.domain}"]
+                    else hosts[0][2 : -(len(self.domain) + 1)]
+                )
                 out[label] = {
-                    "id"      : cert.id,
-                    "expires" : cert.expires_on,
-                    "cert"    : cert.certificate,
-                    "key"     : cert.private_key,
+                    "id":          c["id"],
+                    "expires":     datetime.datetime.fromisoformat(
+                                       c["expires_on"].rstrip("Z")
+                                   ),
+                    "certificate": c["certificate"],
+                    "private_key": c.get("private_key", ""),  # only present on create
                 }
 
-            # if not resp.result_info.more:
-            #     break
+            if page >= resp["result_info"]["total_pages"]:
+                break
             page += 1
-
         return out
 
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _expires_soon(when: datetime.datetime) -> bool:
-        return (when - datetime.datetime.now(datetime.timezone.utc)).days < _RENEW_SOON
+    # ------------------------------------------------------------
+    def _ensure_key_and_csr(self, label: str) -> tuple[Path, Path]:
+        """
+        Generate (or reuse) privkey.pem + req.csr for *label*.
+        """
+        dname   = "_root" if label == "" else label
+        tdir    = (_SSL_DIR / f"{dname}.{self.domain}").resolve()
+        key_p   = tdir / "privkey.pem"
+        csr_p   = tdir / "req.csr"
 
-    # ------------------------------------------------------------------
+        if key_p.exists() and csr_p.exists():
+            return key_p, csr_p
+
+        tdir.mkdir(parents=True, exist_ok=True)
+
+        if label == "":
+            cn   = f"*.{self.domain}"
+            sans = f"DNS:{self.domain},DNS:*.{self.domain}"
+        else:
+            cn   = f"*.{label}.{self.domain}"
+            sans = f"DNS:{label}.{self.domain},DNS:*.{label}.{self.domain}"
+
+        subprocess.run(
+            [
+                "openssl", "req", "-new", "-nodes",
+                "-newkey", "rsa:2048",
+                "-subj", f"/CN={cn}",
+                "-addext", f"subjectAltName={sans}",
+                "-keyout", str(key_p),
+                "-out", str(csr_p),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        os.chmod(key_p, 0o600)
+        os.chmod(csr_p, 0o600)
+        return key_p, csr_p
+
+    # ------------------------------------------------------------
+    def _upload_csr(self, label: str, csr_pem: str) -> dict:
+        """
+        Send CSR to Cloudflare and return the resulting certificate dict.
+        """
+        hostnames = (
+            [self.domain, f"*.{self.domain}"] if label == ""
+            else [f"{label}.{self.domain}", f"*.{label}.{self.domain}"]
+        )
+        cert = self.cf.origin_ca_certificates.create(
+            data={
+                "hostnames":           hostnames,
+                "request_type":        "origin-rsa",
+                "requested_validity":  _CERT_DAYS,
+                "csr":                 csr_pem,
+            }
+        )["result"]
+
+        print(f"[Origin-CA] issued cert id={cert['id']} "
+              f"for {', '.join(hostnames)}")
+        return cert
+
+    # ------------------------------------------------------------
     def _write_to_disk(
         self,
         label: str,
-        entry,
+        entry: dict,
         *,
         is_new: bool = False,
     ) -> tuple[str, str]:
         """
-        Write / refresh the PEM files and return (crt_path, key_path).
+        Store PEMs under /etc/nginx/ssl and return (crt_path, key_path).
         """
-        first = (label or "root").replace("*", "root")  # dir-friendly
-        target_dir = Path("/etc/nginx/ssl") / f"{first}.{self.domain}"
-        crt = target_dir / "fullchain.pem"
-        key = target_dir / "privkey.pem"
+        dname = "_root" if label == "" else label
+        tdir  = (_SSL_DIR / f"{dname}.{self.domain}").resolve()
+        crt_p = tdir / "fullchain.pem"
+        key_p = tdir / "privkey.pem"
 
-        if is_new:
-            target_dir.mkdir(parents=True, exist_ok=True)
-            crt.write_text(entry.certificate)
-            key.write_text(entry.private_key)
-        else:
-            target_dir.mkdir(parents=True, exist_ok=True)
-            if not crt.exists():
-                crt.write_text(entry["cert"])
-            if not key.exists():
-                key.write_text(entry["key"])
+        tdir.mkdir(parents=True, exist_ok=True)
 
-        os.chmod(crt, 0o600)
-        os.chmod(key, 0o600)
-        return str(crt), str(key)
+        if is_new or not crt_p.exists():
+            crt_p.write_text(entry["certificate"])
+            os.chmod(crt_p, 0o600)
+        if is_new and entry.get("private_key"):
+            key_p.write_text(entry["private_key"])
+            os.chmod(key_p, 0o600)
+
+        return str(crt_p), str(key_p)
+
+    # ------------------------------------------------------------
+    @staticmethod
+    def _expiring(expires: datetime.datetime) -> bool:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        return expires - now < datetime.timedelta(days=_RENEW_SOON)
