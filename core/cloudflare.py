@@ -392,6 +392,8 @@ class CloudFlareOriginCAManager:
         """
         existing = self._index_existing()        # {label: {...}}
         wanted   = set(labels)
+        if "" not in wanted: # ensure root wildcard
+            wanted.add("")
 
         paths: dict[str, tuple[str, str]] = {}
 
@@ -444,7 +446,7 @@ class CloudFlareOriginCAManager:
                 out[label] = {
                     "id":          c.id,
                     "expires":     datetime.datetime.fromisoformat( # 2040-07-30 17:12:00 +0000 UTC
-                                        c.expires_at.replace(tzinfo=datetime.timezone.utc)
+                                        c.expires_on.replace(tzinfo=datetime.timezone.utc)
                                    ),
                     "certificate": c.certificate,
                     "private_key": "",  # only present on create
