@@ -430,6 +430,9 @@ class CloudFlareOriginCAManager:
                 per_page=100
             )
 
+            if not resp.result or len(resp.result) == 0:
+                break
+
             for c in resp.result:
                 if c["revoked_at"]:
                     continue
@@ -448,8 +451,8 @@ class CloudFlareOriginCAManager:
                     "private_key": c.get("private_key", ""),  # only present on create
                 }
 
-            if page >= resp["result_info"]["total_pages"]:
-                break
+            # if page >= resp.res["result_info"]["total_pages"]:
+            #     break
             page += 1
         return out
 
