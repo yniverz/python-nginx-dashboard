@@ -509,7 +509,8 @@ class CloudFlareOriginCAManager:
             request_type="origin-rsa",
             requested_validity=_CERT_DAYS,
             csr=csr_pem
-        )["result"]
+        ).__dict__
+        print(cert)
 
         print(f"[Origin-CA] issued cert id={cert['id']} "
               f"for {', '.join(hostnames)}")
