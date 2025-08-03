@@ -2,7 +2,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
-from core.cloudflare import CloudFlareMapEntry, CloudFlareSRVManager, CloudFlareWildcardManager, CloudflareIPCache
+from core.cloudflare import CloudFlareMapEntry, CloudFlareOriginCAManager, CloudFlareSRVManager, CloudFlareWildcardManager, CloudflareIPCache
 from pathlib import Path
 import subprocess, threading, os, datetime
 
@@ -30,7 +30,7 @@ class ProxyTarget:
 
 
 class NginxConfigManager:
-    def __init__(self, config_path, stream_config_path, domain, ssl_cert_path, ssl_cert_key_path, json_path, cloudflare_token, origin_ips: list[str] = []):
+    def __init__(self, config_path, stream_config_path, domain, ssl_cert_path, ssl_cert_key_path, json_path, cloudflare_token, origin_ca_key, origin_ips: list[str] = []):
         self.config_path = config_path
         self.stream_config_path = stream_config_path
         self.domain = domain
@@ -50,6 +50,10 @@ class NginxConfigManager:
         self.cf_wildcard_mgr = CloudFlareWildcardManager(self.cf.cf,
                                                          self.cf.zone_id,
                                                          self.domain)
+        self.cf_origin_ca  = CloudFlareOriginCAManager(self.cf.cf, 
+                                                       self.cf.zone_id, 
+                                                       domain,
+                                                       origin_ca_key)
 
         self.global_upstream_counter = 0
 
@@ -66,6 +70,9 @@ class NginxConfigManager:
         
         self.cf_wildcard_mgr.sync_wildcards(self.proxy_map,
                                     origin_ips=self.origin_ips)
+        
+        need_labels = self.cf_wildcard_mgr.current_labels()
+        self.cf_origin_ca.sync_origin_certs(need_labels)
     
     def save_to_json(self):
         with open(self.json_path, 'w') as json_file:
@@ -359,15 +366,25 @@ server {{
         for subdomain in self.proxy_map["http"].keys():
             path_blocks, upstream_blocks = self._generate_http_path_blocks(subdomain)
 
-            crt, key = self._ensure_selfsigned_cert(subdomain.split('.')[-1], self.domain)
+            # ---------- 2. choose cert/key path ----------
+            if subdomain in ("@", "") or "." not in subdomain:
+                label_key = ""                    # → _root
+            else:
+                label_key = ".".join(subdomain.split(".")[1:])  # drop first label
+
+            dir_name = label_key or "_root"
+            crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
+            key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
+
+            # crt_path, key_path = self._ensure_selfsigned_cert(subdomain.split('.')[-1], self.domain)
             
             subdomain_blocks += f"""
 {upstream_blocks}
 server {{
     listen 443 ssl;
     server_name {subdomain + '.' + self.domain if subdomain != '@' else self.domain};
-    ssl_certificate     { crt };
-    ssl_certificate_key { key };
+    ssl_certificate     {crt_path};
+    ssl_certificate_key {key_path};
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 

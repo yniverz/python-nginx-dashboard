@@ -3,10 +3,15 @@ from dataclasses import dataclass, field
 import ipaddress
 import json
 import os
+import stat
 import time
 from typing import Optional
 import cloudflare
 import requests
+from pathlib import Path
+import datetime
+import subprocess
+import ipaddress
 
 
 @dataclass
@@ -192,6 +197,7 @@ class CloudFlareWildcardManager:
 
         want_labels: set[str] = self._first_labels_requiring_wildcard(proxy_map)
         have: dict[str, dict] = self._records_by_label()
+        self._last_labels = want_labels
 
         want_v4 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 4}
         want_v6 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 6}
@@ -232,6 +238,19 @@ class CloudFlareWildcardManager:
                     dns_record_id=rec_id,
                 )
                 print(f"Removed unneeded {rtype} {fqdn} → {ip}")
+
+    def current_labels(self) -> set[str]:
+        """
+        Returns the label set from the **last** `sync_wildcards()` run.
+
+        • ""  → root wildcard  (*.domain)  
+        • "static"  →  *.static.domain  
+        • "ve.orgn" →  *.ve.orgn.domain, etc.
+
+        If you call this before the first sync the attribute won’t exist,
+        so return an empty set in that case.
+        """
+        return getattr(self, "_last_labels", set())
 
     # ------------------------------------------------------------
     #  HELPERS
@@ -342,3 +361,117 @@ class CloudFlareWildcardManager:
                 dns_record_id=rec_id,
             )
             print(f"Removed {rtype:5} {fqdn} → {ip}")
+
+
+_ORIGIN_CA_ENDPOINT = "/zones/{zone}/origin_ca/certificates"
+_VALIDITY_DAYS      = 5475              # 15 years – max allowed
+_SSL_DIR            = Path("/etc/nginx/ssl")
+
+class CloudFlareOriginCAManager:
+    """
+    For every `label` that already receives a wildcard A/AAAA record
+    (see CloudFlareWildcardManager) make sure we store a matching
+    *Origin-CA* key-pair in  /etc/nginx/ssl/<label or root>/ .
+
+           label == ""    →   *.domain           & domain
+           label == "foo" →   *.foo.domain       & foo.domain
+           label == "bar.baz" → *.bar.baz.domain & bar.baz.domain
+    """
+
+    def __init__(self, cf: cloudflare.Cloudflare, zone_id: str, domain: str,
+                 origin_ca_key: str):
+        self.cf, self.zone_id, self.domain = cf, zone_id, domain
+        self.headers = {"X-Auth-User-Service-Key": origin_ca_key}
+
+    # ------------------------------------------------------------ PUBLIC
+    def sync_origin_certs(self, labels: set[str]) -> None:
+        """Make sure every *wanted* label has a usable certificate."""
+        have = self._index_existing()
+
+        for label in labels:
+            if label not in have or self._is_expiring(have[label]["expires"]):
+                self._issue_or_renew(label, have.get(label))
+
+        # (optional) revoke certs we no longer want
+        for obsolete in (have.keys() - labels):
+            self._revoke(have[obsolete]["id"])
+
+    # ---------------------------------------------------- low-level helpers
+    def _index_existing(self) -> dict[str, dict]:
+        by_label = {}
+        url = _ORIGIN_CA_ENDPOINT.format(zone=self.zone_id)
+        for page in self.cf.paginate(url, headers=self.headers):
+            for cert in page["result"]:
+                if cert["revoked_at"] is not None:
+                    continue
+                # Every cert we create carries exactly 2 hostnames
+                hn = sorted(cert["hostnames"])
+                label = "" if hn == [self.domain, f"*.{self.domain}"] \
+                        else hn[0][2 : -(len(self.domain)+1)]      # '*.lbl.domain'→lbl
+                by_label[label] = {
+                    "id":      cert["id"],
+                    "expires": datetime.datetime.fromisoformat(cert["expires_on"][:-1])
+                }
+        return by_label
+
+    def _is_expiring(self, dt: datetime.datetime,
+                     days: int = 30) -> bool:
+        return dt - datetime.datetime.utcnow() < datetime.timedelta(days)
+
+    # ----------------------------------------------------- issue / renew
+    def _issue_or_renew(self, label: str, have: dict|None):
+        hosts = self._hosts_for(label)
+        key_p, csr_p = self._make_key_and_csr(label, hosts)
+
+        # -------- request cert -----------
+        url  = _ORIGIN_CA_ENDPOINT.format(zone=self.zone_id)
+        body = {
+            "csr":              csr_p.read_text(),
+            "hostnames":        hosts,
+            "request_type":     "origin-rsa",
+            "requested_validity": _VALIDITY_DAYS
+        }
+        if have:                        # we are *renewing* – revoke old one first
+            self._revoke(have["id"])
+
+        r = self.cf.post(url, data=json.dumps(body), headers=self.headers)
+        cert_pem = r["result"]["certificate"]
+
+        crt = key_p.parent / "fullchain.pem"
+        crt.write_text(cert_pem)
+        # nginx only needs privkey + cert; intermediate is already included
+
+        print(f"[Origin-CA]  ✅  ({label or '*'}) certificate ready")
+
+    def _revoke(self, cert_id: str):
+        url = f"{_ORIGIN_CA_ENDPOINT.format(zone=self.zone_id)}/{cert_id}"
+        self.cf.delete(url, headers=self.headers)
+        print(f"[Origin-CA]  ✂  revoked obsolete cert {cert_id}")
+
+    # ------------------------------------------------ file helpers
+    def _make_key_and_csr(self, label: str, hosts: list[str]) -> tuple[Path, Path]:
+        target   = _SSL_DIR / (label or "_root")
+        key_p    = target / "privkey.pem"
+        csr_p    = target / "req.csr"
+
+        if key_p.exists() and csr_p.exists():
+            return key_p, csr_p        # reuse existing key + CSR
+
+        target.mkdir(parents=True, exist_ok=True)
+        names = ",".join(f"DNS:{h}" for h in hosts)
+
+        subprocess.run([
+            "openssl","req","-new","-newkey","rsa:2048","-nodes","-keyout",str(key_p),
+            "-subj", f"/CN={hosts[0]}",
+            "-addext", f"subjectAltName={names}",
+            "-out", str(csr_p)
+        ], check=True)
+
+        key_p.chmod(stat.S_IRUSR | stat.S_IWUSR)   # 0600
+        return key_p, csr_p
+
+    def _hosts_for(self, label: str) -> list[str]:
+        if label == "":
+            return [self.domain, f"*.{self.domain}"]
+        sfx = f"{label}.{self.domain}"
+        return [sfx, f"*.{sfx}"]
