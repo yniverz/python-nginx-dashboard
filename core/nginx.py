@@ -371,7 +371,8 @@ server {{
             else:
                 label_key = ".".join(subdomain.split(".")[1:])  # drop first label
 
-            dir_name = label_key or "_root"
+            dir_name = (label_key or "_root") + f".{self.domain}"
+            # /etc/nginx/ssl/_root.{domain}/fullchain.pem
             crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
             key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
 
