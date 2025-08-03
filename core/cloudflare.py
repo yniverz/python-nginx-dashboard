@@ -398,20 +398,51 @@ class CloudFlareOriginCAManager:
 
     # ---------------------------------------------------- low-level helpers
     def _index_existing(self) -> dict[str, dict]:
-        by_label = {}
-        url = _ORIGIN_CA_ENDPOINT.format(zone=self.zone_id)
-        for page in self.cf.paginate(url, headers=self.headers):
-            for cert in page["result"]:
+        """
+        Return {label: {"id": <cert-id>, "expires": <datetime>}, …} for all
+        *active* Origin-CA certificates in the zone.
+
+        • "" represents the root wildcard  (*.domain + domain)
+        • "foo"  → certificate for  *.foo.domain + foo.domain
+        • "ve.orgn" → certificate for *.ve.orgn.domain  + ve.orgn.domain
+        """
+        by_label: dict[str, dict] = {}
+        endpoint = _ORIGIN_CA_ENDPOINT.format(zone=self.zone_id)
+
+        page = 1
+        while True:
+            resp = self.cf.get(
+                endpoint,
+                params={"page": page, "per_page": 50},
+                headers=self.headers,
+            )
+
+            for cert in resp["result"]:
                 if cert["revoked_at"] is not None:
-                    continue
-                # Every cert we create carries exactly 2 hostnames
+                    continue                      # ignore revoked
+
+                # hostnames come back unsorted → sort for deterministic test
                 hn = sorted(cert["hostnames"])
-                label = "" if hn == [self.domain, f"*.{self.domain}"] \
-                        else hn[0][2 : -(len(self.domain)+1)]      # '*.lbl.domain'→lbl
+
+                if hn == [self.domain, f"*.{self.domain}"]:
+                    label = ""                    # root cert
+                else:
+                    # take everything between "*." and ".<domain>"
+                    label = hn[0][2 : -(len(self.domain) + 1)]
+
                 by_label[label] = {
-                    "id":      cert["id"],
-                    "expires": datetime.datetime.fromisoformat(cert["expires_on"][:-1])
+                    "id": cert["id"],
+                    "expires": datetime.datetime.fromisoformat(
+                        cert["expires_on"].rstrip("Z")
+                    ),
                 }
+
+            # pagination bookkeeping
+            info = resp.get("result_info", {})
+            if not info or page >= info.get("total_pages", 1):
+                break
+            page += 1
+
         return by_label
 
     def _is_expiring(self, dt: datetime.datetime,
