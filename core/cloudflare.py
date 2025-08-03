@@ -423,8 +423,9 @@ class CloudFlareOriginCAManager:
         out: dict[str, dict] = {}
         page = 1
         while True:
-            resp = self.cf.origin_ca_certificates.get(
-                params={"page": page, "per_page": 100}
+            resp = self.cf.origin_ca_certificates.list(
+                page=page,
+                per_page=100
             )
 
             for c in resp["result"]:
@@ -499,12 +500,10 @@ class CloudFlareOriginCAManager:
             else [f"{label}.{self.domain}", f"*.{label}.{self.domain}"]
         )
         cert = self.cf.origin_ca_certificates.create(
-            data={
-                "hostnames":           hostnames,
-                "request_type":        "origin-rsa",
-                "requested_validity":  _CERT_DAYS,
-                "csr":                 csr_pem,
-            }
+            hostnames=hostnames,
+            request_type="origin-rsa",
+            requested_validity=_CERT_DAYS,
+            csr=csr_pem
         )["result"]
 
         print(f"[Origin-CA] issued cert id={cert['id']} "
