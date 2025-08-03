@@ -430,7 +430,7 @@ class CloudFlareOriginCAManager:
                 per_page=100
             )
 
-            for c in resp["result"]:
+            for c in resp.result:
                 if c["revoked_at"]:
                     continue
                 hosts = sorted(c["hostnames"])
