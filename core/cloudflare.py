@@ -446,7 +446,7 @@ class CloudFlareOriginCAManager:
                 zone_id   = self.zone_id,
                 page      = page,
                 per_page  = 100,
-                direction = "asc",
+                # direction = "asc",
             )
             for cert in resp.result:
                 if cert.revoked_at is not None:
