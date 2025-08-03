@@ -47,6 +47,7 @@ class NginxConfigManager:
         self.cloudflare_srv_map: list[CloudFlareMapEntry] = []
 
         self.origin_ips = origin_ips
+        self.cloudflare_origin_ca_key_set = bool(origin_ca_key)
         self.cf_wildcard_mgr = CloudFlareWildcardManager(self.cf.cf,
                                                          self.cf.zone_id,
                                                          self.domain)
@@ -365,19 +366,24 @@ server {{
         for subdomain in self.proxy_map["http"].keys():
             path_blocks, upstream_blocks = self._generate_http_path_blocks(subdomain)
 
-            # ---------- 2. choose cert/key path ----------
-            if subdomain in ("@", "") or "." not in subdomain:
-                label_key = ""                    # → _root
-            else:
-                label_key = ".".join(subdomain.split(".")[1:])  # drop first label
+            crt_path = self.ssl_cert_path
+            key_path = self.ssl_cert_key_path
 
-            dir_name = (label_key or "_root") + f".{self.domain}"
-            # /etc/nginx/ssl/_root.{domain}/fullchain.pem
-            crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
-            key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
+            if self.cloudflare_origin_ca_key_set:
+                # ---------- 2. choose cert/key path ----------
+                if subdomain in ("@", "") or "." not in subdomain:
+                    label_key = ""                    # → _root
+                else:
+                    label_key = ".".join(subdomain.split(".")[1:])  # drop first label
 
-            # crt_path, key_path = self._ensure_selfsigned_cert(subdomain.split('.')[-1], self.domain)
-            
+                dir_name = (label_key or "_root") + f".{self.domain}"
+                # /etc/nginx/ssl/_root.{domain}/fullchain.pem
+                crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
+                key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
+
+            elif not crt_path or not key_path:
+                crt_path, key_path = self._ensure_selfsigned_cert(subdomain.split('.')[-1], self.domain)
+
             subdomain_blocks += f"""
 {upstream_blocks}
 server {{

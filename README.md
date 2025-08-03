@@ -75,6 +75,12 @@ Needed Permissions for the api key:
 
 And you will need to copy the Origin CA certificate and key to the appropriate directory on your server. This can be found at [Dashboard -> Profile -> API Tokens](https://dash.cloudflare.com/profile/api-tokens).
 
+### TLS
+Activating Cloudflare will also enable Proxying and Verified TLS between Cloudflare and your server. Make sure to set the SSL/TLS encryption mode to "Full (strict)" in the Cloudflare dashboard.
+
+If the Origin CA key is not set, the application will automatically use the provided certificates through the configuration file. You will not be able to use multiple layers of subdomains now.
+ If those are not provided, it will generate self-signed certificates for the subdomains including layers of subdomains.
+
 ## Usage
 
 The application will run deamonized in the background once installed. You can start, stop, or restart the service using:
