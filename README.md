@@ -37,6 +37,7 @@ Create a `config.json` file in the root directory with the following structure:
 - `username`: The username for web authentication.
 - `password`: The password for web authentication.
 - `cloudflare_token`: The Cloudflare API token to manage SRV records.
+- `cloudflare_origin_ca_key`: The Cloudflare Origin CA key to manage SSL certificates.
 - `origin_ips`: A list of IPs under which the NginX server is accessible. This is used to ensure proper dns records in CloudFlare.
 - `allowed_api_keys`: A list of API keys to allow access to the API endpoints.
 
@@ -52,6 +53,7 @@ Create a `config.json` file in the root directory with the following structure:
     "username": "username",
     "password": "password",
     "cloudflare_token": "***cf-token***",
+    "cloudflare_origin_ca_key": "***cf-origin-ca-key***",
     "origin_ips": [
         "123.45.67.89",
         "198.51.100.1"

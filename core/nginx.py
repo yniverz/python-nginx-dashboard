@@ -42,7 +42,7 @@ class NginxConfigManager:
             "stream": {}
         }
 
-        self.cf = CloudFlareSRVManager(cloudflare_token, self.domain)
+        self.cf = CloudFlareSRVManager(cloudflare_token, origin_ca_key, self.domain)
         self.cf_ip_cache = CloudflareIPCache()
         self.cloudflare_srv_map: list[CloudFlareMapEntry] = []
 
@@ -72,7 +72,7 @@ class NginxConfigManager:
                                     origin_ips=self.origin_ips)
         
         need_labels = self.cf_wildcard_mgr.current_labels()
-        self.cf_origin_ca.sync_origin_certs(need_labels)
+        self.cf_origin_ca.ensure_certs(need_labels)
     
     def save_to_json(self):
         with open(self.json_path, 'w') as json_file:
