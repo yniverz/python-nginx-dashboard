@@ -52,8 +52,7 @@ class NginxConfigManager:
                                                          self.domain)
         self.cf_origin_ca  = CloudFlareOriginCAManager(self.cf.cf, 
                                                        self.cf.zone_id, 
-                                                       domain,
-                                                       origin_ca_key)
+                                                       domain)
 
         self.global_upstream_counter = 0
 
