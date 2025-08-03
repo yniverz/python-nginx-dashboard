@@ -408,11 +408,10 @@ class CloudFlareOriginCAManager:
             )
 
             cert = self.cf.origin_ca_certificates.create(
-                zone_id            = self.zone_id,
+                csr                = None,          # → let CF create key
                 hostnames          = hostnames,
                 request_type       = "origin-rsa",
                 requested_validity = _CERT_DAYS,
-                csr                = None,          # → let CF create key
             )
 
             result[label] = self._write_to_disk(label, cert, is_new=True)
@@ -424,7 +423,6 @@ class CloudFlareOriginCAManager:
         obsolete = set(existing) - wanted
         for label in obsolete:
             self.cf.origin_ca_certificates.delete(
-                zone_id       = self.zone_id,
                 certificate_id= existing[label]["id"],
             )
             print(f"Revoked obsolete cert id={existing[label]['id']} "
