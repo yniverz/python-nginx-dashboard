@@ -445,9 +445,7 @@ class CloudFlareOriginCAManager:
                 )
                 out[label] = {
                     "id":          c.id,
-                    "expires":     datetime.datetime.fromisoformat( # 2040-07-30 17:12:00 +0000 UTC
-                                        c.expires_on.replace(tzinfo=datetime.timezone.utc)
-                                   ),
+                    "expires":     datetime.datetime.strptime(c.expires_on.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S %z"),
                     "certificate": c.certificate,
                     "private_key": "",  # only present on create
                 }
