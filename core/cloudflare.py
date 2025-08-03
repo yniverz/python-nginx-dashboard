@@ -363,7 +363,7 @@ class CloudFlareWildcardManager:
             print(f"Removed {rtype:5} {fqdn} → {ip}")
 
 
-_CERT_DAYS  = 365 * 5        # 5-year Origin-CA cert
+_CERT_DAYS  = 365 * 15        # 5-year Origin-CA cert
 _RENEW_SOON = 30             # renew if <30 days to expiry
 _SSL_DIR    = Path("/etc/nginx/ssl")
 
