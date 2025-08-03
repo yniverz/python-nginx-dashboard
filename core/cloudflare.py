@@ -408,7 +408,7 @@ class CloudFlareOriginCAManager:
             )
 
             cert = self.cf.origin_ca_certificates.create(
-                csr                = None,          # → let CF create key
+                csr                = cloudflare.NOT_GIVEN,          # → let CF create key
                 hostnames          = hostnames,
                 request_type       = "origin-rsa",
                 requested_validity = _CERT_DAYS,
