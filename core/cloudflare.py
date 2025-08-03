@@ -448,6 +448,10 @@ class CloudFlareOriginCAManager:
                 per_page  = 100,
                 # direction = "asc",
             )
+
+            if len(resp.result) == 0:
+                break
+
             for cert in resp.result:
                 if cert.revoked_at is not None:
                     continue                          # ignore revoked
@@ -463,8 +467,8 @@ class CloudFlareOriginCAManager:
                     "key"     : cert.private_key,
                 }
 
-            if not resp.result_info.more:
-                break
+            # if not resp.result_info.more:
+            #     break
             page += 1
 
         return out
