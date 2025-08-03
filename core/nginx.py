@@ -50,8 +50,9 @@ class NginxConfigManager:
         self.cf_wildcard_mgr = CloudFlareWildcardManager(self.cf.cf,
                                                          self.cf.zone_id,
                                                          self.domain)
-        self.cf_origin_ca  = CloudFlareOriginCAManager(self.cf.cf, 
-                                                       domain)
+        self.cf_origin_ca  = CloudFlareOriginCAManager(self.cf.cf,
+                                                       self.cf.zone_id,
+                                                       self.domain)
 
         self.global_upstream_counter = 0
 

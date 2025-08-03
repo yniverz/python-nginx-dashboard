@@ -377,9 +377,10 @@ class CloudFlareOriginCAManager:
         've.orgn'   → *.ve.orgn.example.com + ve.orgn.example.com
     """
 
-    def __init__(self, cf: cloudflare.Cloudflare, domain: str):
+    def __init__(self, cf: cloudflare.Cloudflare, zone_id: str, domain: str):
         self.cf     = cf              # authenticated Cloudflare()
         self.domain = domain
+        self.zone_id = zone_id
 
     # ------------------------------------------------------------
     #  PUBLIC
@@ -424,6 +425,7 @@ class CloudFlareOriginCAManager:
         page = 1
         while True:
             resp = self.cf.origin_ca_certificates.list(
+                zone_id=self.zone_id,
                 page=page,
                 per_page=100
             )
