@@ -171,9 +171,12 @@ class ProxyManager:
     def index(self):
         if not session.get('logged_in'):
             return redirect(self.app.config['APPLICATION_ROOT'] + url_for('login'))
+        
+        sorted_http_keys = sorted(self.nginx_manager.proxy_map['http'].keys(), key=lambda x: tuple(map(int, x.split('.'))))
+        sorted_http_map = {k: self.nginx_manager.proxy_map['http'][k] for k in sorted_http_keys}
 
         return render_template("index.jinja", 
-                               proxy_map=self.nginx_manager.proxy_map, 
+                               proxy_map=sorted_http_map, 
                                gateway_server_list=self.frp_manager.get_server_list(), 
                                gateway_client_list=self.frp_manager.get_client_list(), 
                                gateway_connection_list=self.frp_manager.get_connection_list(), 

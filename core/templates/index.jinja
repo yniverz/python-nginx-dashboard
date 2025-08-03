@@ -21,7 +21,7 @@
     </form>
     <table>
         <tr><th>Subdomain</th><th>Path</th><th>Target</th><th>Status</th><th>Actions</th></tr>
-        {% for subdomain in proxy_map["http"].keys() | map('reverse') | sort | map('reverse') %}
+        {% for subdomain in proxy_map["http"].keys() %}
             {% for path, data in proxy_map["http"][subdomain].items() | sort %}
                 <tr>
                     <td style="text-align: right;">{{ subdomain }}</td>
