@@ -443,8 +443,8 @@ class CloudFlareOriginCAManager:
                 )
                 out[label] = {
                     "id":          c.id,
-                    "expires":     datetime.datetime.fromisoformat(
-                                       c.expires_on.rstrip("Z")
+                    "expires":     datetime.datetime.fromisoformat( # 2040-07-30 17:12:00 +0000 UTC
+                                        c.expires_at.replace(tzinfo=datetime.timezone.utc)
                                    ),
                     "certificate": c.certificate,
                     "private_key": "",  # only present on create
@@ -508,12 +508,13 @@ class CloudFlareOriginCAManager:
             request_type="origin-rsa",
             requested_validity=_CERT_DAYS,
             csr=csr_pem
-        ).__dict__
-        print(cert)
+        )
+        
+        cert_dict = cert.__dict__
 
-        print(f"[Origin-CA] issued cert id={cert['id']} "
+        print(f"[Origin-CA] issued cert id={cert_dict['id']} "
               f"for {', '.join(hostnames)}")
-        return cert
+        return cert_dict
 
     # ------------------------------------------------------------
     def _write_to_disk(
