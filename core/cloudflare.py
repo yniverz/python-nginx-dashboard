@@ -203,7 +203,7 @@ class CloudFlareWildcardManager:
         want_v6 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 6}
 
         for label in want_labels:
-            fqdn = f"*.{self.domain}" if label == "" else f"*.{label}.{self.domain}"
+            fqdn = f"*" if label == "" else f"*.{label}"
             print(f"Ensuring wildcard {fqdn} → {want_v4} (v4), {want_v6} (v6)")
             have_entry = have.get(label, {"A": set(), "AAAA": set(), "map": {}})
 
