@@ -364,7 +364,8 @@ class CloudFlareWildcardManager:
             #     continue
 
             # label = rec.name[:-len(suffix)] if rec.name.endswith(suffix) else continue
-            if not rec.name.endswith(suffix):
+
+            if not rec.name.endswith(suffix) and rec.name != self.domain:
                 continue
 
             label = rec.name[:-len(suffix)]
