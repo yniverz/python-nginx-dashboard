@@ -199,8 +199,6 @@ class CloudFlareWildcardManager:
         have: dict[str, dict] = self._records_by_label()
         self._last_labels = want_labels
 
-        suffix = f".{self.domain}"
-
         want_v4 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 4}
         want_v6 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 6}
 
