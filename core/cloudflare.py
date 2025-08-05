@@ -195,21 +195,19 @@ class CloudFlareWildcardManager:
     ) -> None:
         """Synchronise DNS with the dashboard state."""
 
-        want_labels: set[str] = self._first_labels_requiring_wildcard(proxy_map)
+        want_labels: set[str] = self._first_labels_requiring_wildcard(proxy_map, origin_ips)
         have: dict[str, dict] = self._records_by_label()
         self._last_labels = want_labels
 
         want_v4 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 4}
         want_v6 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 6}
 
-        for label in want_labels:
-            fqdn = f"*" if label == "" else f"*.{label}"
+        for fqdn in want_labels:
             print(f"Ensuring wildcard {fqdn} → {want_v4} (v4), {want_v6} (v6)")
-            have_entry = have.get(label, {"A": set(), "AAAA": set(), "map": {}})
+            have_entry = have.get(fqdn, {"A": set(), "AAAA": set(), "map": {}})
 
             # ---- IPv4 ---------------------------------------------------
             self._ensure_records(
-                label,
                 fqdn,
                 rtype="A",
                 want_set=want_v4,
@@ -221,7 +219,6 @@ class CloudFlareWildcardManager:
             # ---- IPv6 ---------------------------------------------------
             if want_v6:
                 self._ensure_records(
-                    label,
                     fqdn,
                     rtype="AAAA",
                     want_set=want_v6,
@@ -230,35 +227,38 @@ class CloudFlareWildcardManager:
                     ttl=ttl,
                 )
 
+        
         # also add a record for each origin IP that has a key that is not "-" to the ip without proxy mode
+        origin_ip_labels = set()
         for key, ip in origin_ips.items():
             if key == "-":
                 continue
             fqdn = f"{key}.direct.{self.domain}" if key else self.domain
+            origin_ip_labels.add(fqdn)
             print(f"Ensuring direct record for {fqdn} → {ip}")
+            have_entry = have.get(fqdn, {"A": set(), "AAAA": set(), "map": {}})
+
             if ipaddress.ip_address(ip).version == 4:
                 self._ensure_records(
-                    "",
                     fqdn,
                     rtype="A",
                     want_set={ip},
-                    have_entry=have.get("", {"A": set(), "AAAA": set(), "map": {}}),
+                    have_entry=have_entry,
                     proxied=False,
                     ttl=ttl,
                 )
             elif ipaddress.ip_address(ip).version == 6:
                 self._ensure_records(
-                    "",
                     fqdn,
                     rtype="AAAA",
                     want_set={ip},
-                    have_entry=have.get("", {"A": set(), "AAAA": set(), "map": {}}),
+                    have_entry=have_entry,
                     proxied=False,
                     ttl=ttl,
                 )
 
         # ---- remove *whole* label wildcards that are not wanted anymore ----
-        for obsolete in (have.keys() - want_labels):
+        for obsolete in (have.keys() - (want_labels | origin_ip_labels)):
             fqdn = f"*.{self.domain}" if obsolete == "" else f"*.{obsolete}.{self.domain}"
             for (rtype, ip), rec_id in have[obsolete]["map"].items():
                 print(f"Removing obsolete {rtype} {fqdn} → {ip}")
@@ -267,6 +267,8 @@ class CloudFlareWildcardManager:
                     dns_record_id=rec_id,
                 )
                 print(f"Removed unneeded {rtype} {fqdn} → {ip}")
+
+        
 
     def current_labels(self) -> set[str]:
         """
@@ -279,12 +281,23 @@ class CloudFlareWildcardManager:
         If you call this before the first sync the attribute won’t exist,
         so return an empty set in that case.
         """
-        return getattr(self, "_last_labels", set())
+        labels = getattr(self, "_last_labels", set())
+        new_labels = set()
+
+        for label in labels:
+            if not label.startswith("*.") and label != "":
+                continue  # skip non-wildcard labels
+            if label == "":
+                new_labels.add("")
+            else:
+                new_labels.add(label[2:])
+
+        return new_labels
 
     # ------------------------------------------------------------
     #  HELPERS
     # ------------------------------------------------------------
-    def _first_labels_requiring_wildcard(self, proxy_map: dict) -> set[str]:
+    def _first_labels_requiring_wildcard(self, proxy_map: dict, origin_ips: dict) -> set[str]:
         """
         Return every label (possibly containing dots) that needs a wildcard.
 
@@ -310,10 +323,11 @@ class CloudFlareWildcardManager:
 
                 # walk up the chain, add every parent
                 for i in range(1, len(parts)):       # i = 1 … len-1
-                    labels.add(".".join(parts[i:]))
+                    labels.add("*." + ".".join(parts[i:]))
 
         if root_needed:
-            labels.add("")                           # '' = *.domain
+            labels.add("")                              # '' = domain
+            labels.add("*.")                            # '*.' = *.domain
 
         return labels
 
@@ -340,13 +354,19 @@ class CloudFlareWildcardManager:
             if rec.type not in ("A", "AAAA"):
                 continue
 
-            # recognise "*.domain" (root) or "*.label.domain"
-            if rec.name == f"*.{self.domain}":
-                label = ""
-            elif rec.name.startswith("*.") and rec.name.endswith(suffix):
-                label = rec.name[2 : -len(suffix)]
-            else:
+            # # recognise "*.domain" (root) or "*.label.domain"
+            # if rec.name == f"*.{self.domain}":
+            #     label = ""
+            # elif rec.name.startswith("*.") and rec.name.endswith(suffix):
+            #     label = rec.name[2 : -len(suffix)]
+            # else:
+            #     continue
+
+            # label = rec.name[:-len(suffix)] if rec.name.endswith(suffix) else continue
+            if not rec.name.endswith(suffix):
                 continue
+
+            label = rec.name[:-len(suffix)]
 
             ip = rec.content
             out[label][rec.type].add(ip)
@@ -357,7 +377,6 @@ class CloudFlareWildcardManager:
     # ------------------------------------------------------------------
     def _ensure_records(
         self,
-        label: str,
         fqdn: str,
         *,
         rtype: str,
