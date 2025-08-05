@@ -204,6 +204,7 @@ class CloudFlareWildcardManager:
 
         for label in want_labels:
             fqdn = f"*.{self.domain}" if label == "" else f"*.{label}.{self.domain}"
+            print(f"Ensuring wildcard {fqdn} → {want_v4} (v4), {want_v6} (v6)")
             have_entry = have.get(label, {"A": set(), "AAAA": set(), "map": {}})
 
             # ---- IPv4 ---------------------------------------------------
@@ -234,6 +235,7 @@ class CloudFlareWildcardManager:
             if key == "-":
                 continue
             fqdn = f"{key}.direct.{self.domain}" if key else self.domain
+            print(f"Ensuring direct record for {fqdn} → {ip}")
             if ipaddress.ip_address(ip).version == 4:
                 self._ensure_records(
                     "",
@@ -259,6 +261,7 @@ class CloudFlareWildcardManager:
         for obsolete in (have.keys() - want_labels):
             fqdn = f"*.{self.domain}" if obsolete == "" else f"*.{obsolete}.{self.domain}"
             for (rtype, ip), rec_id in have[obsolete]["map"].items():
+                print(f"Removing obsolete {rtype} {fqdn} → {ip}")
                 self.cf.dns.records.delete(
                     zone_id=self.zone_id,
                     dns_record_id=rec_id,
