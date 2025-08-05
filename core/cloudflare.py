@@ -199,11 +199,12 @@ class CloudFlareWildcardManager:
         have: dict[str, dict] = self._records_by_label()
         self._last_labels = want_labels
 
+        suffix = f".{self.domain}"
+
         want_v4 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 4}
         want_v6 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 6}
 
-        for label in want_labels:
-            fqdn = self.domain if label == "" else label
+        for fqdn in want_labels:
             print(f"Ensuring wildcard {fqdn} → {want_v4} (v4), {want_v6} (v6)")
             have_entry = have.get(fqdn, {"A": set(), "AAAA": set(), "map": {}})
 
@@ -232,9 +233,9 @@ class CloudFlareWildcardManager:
         # also add a record for each origin IP that has a key that is not "-" to the ip without proxy mode
         origin_ip_labels = set()
         for key, ip in origin_ips.items():
-            if key == "-":
+            if not key or key == "-":
                 continue
-            fqdn = f"{key}.direct.{self.domain}" if key else self.domain
+            fqdn = f"{key}.direct.{self.domain}"
             origin_ip_labels.add(fqdn)
             print(f"Ensuring direct record for {fqdn} → {ip}")
             have_entry = have.get(fqdn, {"A": set(), "AAAA": set(), "map": {}})
@@ -259,9 +260,8 @@ class CloudFlareWildcardManager:
                 )
 
         # ---- remove *whole* label wildcards that are not wanted anymore ----
-        for obsolete in (have.keys() - (want_labels | origin_ip_labels)):
-            fqdn = f"*.{self.domain}" if obsolete == "" else f"*.{obsolete}.{self.domain}"
-            for (rtype, ip), rec_id in have[obsolete]["map"].items():
+        for fqdn in (have.keys() - (want_labels | origin_ip_labels)):
+            for (rtype, ip), rec_id in have[fqdn]["map"].items():
                 print(f"Removing obsolete {rtype} {fqdn} → {ip}")
                 self.cf.dns.records.delete(
                     zone_id=self.zone_id,
@@ -285,13 +285,15 @@ class CloudFlareWildcardManager:
         labels = getattr(self, "_last_labels", set())
         new_labels = set()
 
+        suffix = f".{self.domain}"
+
         for label in labels:
-            if not label.startswith("*.") and label != "":
+            if not label.startswith("*.") and label != self.domain:
                 continue  # skip non-wildcard labels
-            if label == "":
+            if label == self.domain:
                 new_labels.add("")
             else:
-                new_labels.add(label[2:])
+                new_labels.add(label[2: -len(suffix)])
 
         return new_labels
 
@@ -324,11 +326,11 @@ class CloudFlareWildcardManager:
 
                 # walk up the chain, add every parent
                 for i in range(1, len(parts)):       # i = 1 … len-1
-                    labels.add("*." + ".".join(parts[i:]))
+                    labels.add("*." + ".".join(parts[i:]) + "." + self.domain)
 
         if root_needed:
-            labels.add("")                              # '' = domain
-            labels.add("*.")                            # '*.' = *.domain
+            labels.add(self.domain)                              # '' = domain
+            labels.add("*." + self.domain)                        # '*.' = *.domain
 
         return labels
 
@@ -341,8 +343,8 @@ class CloudFlareWildcardManager:
         Returns
         -------
         {
-          "":        {"A": {ip,…}, "AAAA": {ip,…}, "map": {(rtype, ip): rec_id}},
-          "static":  {...},
+          "domain.tld":        {"A": {ip,…}, "AAAA": {ip,…}, "map": {(rtype, ip): rec_id}},
+          "static.domain.tld":  {...},
           ...
         }
         """
@@ -368,7 +370,7 @@ class CloudFlareWildcardManager:
             if not rec.name.endswith(suffix) and rec.name != self.domain:
                 continue
 
-            label = rec.name[:-len(suffix)]
+            label = rec.name
 
             ip = rec.content
             out[label][rec.type].add(ip)
@@ -390,6 +392,13 @@ class CloudFlareWildcardManager:
         have_set = have_entry[rtype]
         missing = want_set - have_set
         extra = have_set - want_set
+
+        suffix = f".{self.domain}"
+
+        if fqdn == self.domain:
+            fqdn = "@"
+        else:
+            fqdn = fqdn[:-len(suffix)]
 
         # ---- create missing ----
         for ip in missing:
