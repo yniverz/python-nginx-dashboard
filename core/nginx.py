@@ -30,7 +30,7 @@ class ProxyTarget:
 
 
 class NginxConfigManager:
-    def __init__(self, config_path, stream_config_path, domain, ssl_cert_path, ssl_cert_key_path, json_path, cloudflare_token, origin_ca_key, origin_ips: list[str] = []):
+    def __init__(self, config_path, stream_config_path, domain, ssl_cert_path, ssl_cert_key_path, json_path, cloudflare_token, origin_ca_key, origin_ips: dict[str, str] = {}):
         self.config_path = config_path
         self.stream_config_path = stream_config_path
         self.domain = domain
@@ -114,7 +114,11 @@ class NginxConfigManager:
                 return
 
             routes.append(target.route)
-        
+
+        origin_dns = [f"{d}.direct" for d in self.origin_ips.values()]
+        if subdomain in origin_dns:
+            return
+
         if subdomain not in self.proxy_map["http"]:
             self.proxy_map["http"][subdomain] = {}
 
@@ -167,6 +171,10 @@ class NginxConfigManager:
 
     def add_redirect(self, subdomain: str, path: str, route: str):
         if path == "/robots.txt":
+            return
+        
+        origin_dns = [f"{d}.direct" for d in self.origin_ips.values()]
+        if subdomain in origin_dns:
             return
         
         if subdomain not in self.proxy_map["http"]:

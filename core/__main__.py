@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     DOMAIN = config['domain']
     CHECK_DOMAINS = config['check_domains'] if 'check_domains' in config else []
-    ORIGIN_IPS = config.get("origin_ips", [])
+    ORIGIN_IPS = config.get("origin_ips", {})
     CF_ORIGIN_CA_KEY = config.get("cloudflare_origin_ca_key", "")
     nginx_manager = NginxConfigManager(
         config_path='/etc/nginx/conf.d/'+ DOMAIN + '.conf',

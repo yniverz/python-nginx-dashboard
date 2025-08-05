@@ -188,7 +188,7 @@ class CloudFlareWildcardManager:
     def sync_wildcards(
         self,
         proxy_map: dict,
-        origin_ips: list[str],
+        origin_ips: dict[str, str],
         *,
         proxied: bool = True,
         ttl: int = 1,
@@ -199,8 +199,8 @@ class CloudFlareWildcardManager:
         have: dict[str, dict] = self._records_by_label()
         self._last_labels = want_labels
 
-        want_v4 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 4}
-        want_v6 = {ip for ip in origin_ips if ipaddress.ip_address(ip).version == 6}
+        want_v4 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 4}
+        want_v6 = {ip for ip in origin_ips.values() if ipaddress.ip_address(ip).version == 6}
 
         for label in want_labels:
             fqdn = f"*.{self.domain}" if label == "" else f"*.{label}.{self.domain}"
@@ -226,6 +226,32 @@ class CloudFlareWildcardManager:
                     want_set=want_v6,
                     have_entry=have_entry,
                     proxied=proxied,
+                    ttl=ttl,
+                )
+
+        # also add a record for each origin IP that has a key that is not "-" to the ip without proxy mode
+        for key, ip in origin_ips.items():
+            if key == "-":
+                continue
+            fqdn = f"{key}.direct.{self.domain}" if key else self.domain
+            if ipaddress.ip_address(ip).version == 4:
+                self._ensure_records(
+                    "",
+                    fqdn,
+                    rtype="A",
+                    want_set={ip},
+                    have_entry=have.get("", {"A": set(), "AAAA": set(), "map": {}}),
+                    proxied=False,
+                    ttl=ttl,
+                )
+            elif ipaddress.ip_address(ip).version == 6:
+                self._ensure_records(
+                    "",
+                    fqdn,
+                    rtype="AAAA",
+                    want_set={ip},
+                    have_entry=have.get("", {"A": set(), "AAAA": set(), "map": {}}),
+                    proxied=False,
                     ttl=ttl,
                 )
 

@@ -8,10 +8,10 @@
     "password": "secret",
     "cloudflare_token": "CloudFlareToken",
     "cloudflare_origin_ca_key": "v1.0-xxxxxxxx",
-    "origin_ips": [
-        "203.0.113.7",
-        "203.0.113.19"
-    ],
+    "origin_ips": {
+        "location1": "203.0.113.7",
+        "-": "203.0.113.19"
+    },
     "allowed_api_keys": [
         "SuperSecretKey1",
         "SuperSecretKey2"
