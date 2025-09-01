@@ -1,0 +1,35 @@
+{% extends "_layout.html" %}
+{% block content %}
+<h1>http routes</h1>
+
+<h2>add</h2>
+<form method="post" action="/http">
+  <label>domain
+    <select name="domain_id">
+      {% for d in domains %}
+      <option value="{{d.id}}">{{d.name}}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>subdomain <input name="subdomain" placeholder="app or @"></label>
+  <label>backend_url <input name="backend_url" placeholder="http://127.0.0.1:3000" required></label>
+  <button type="submit">create</button>
+</form>
+
+<h2>list</h2>
+<table>
+  <tr><th>id</th><th>domain</th><th>subdomain</th><th>fqdn</th><th>backend</th><th>actions</th></tr>
+  {% for d, r in routes %}
+  <tr>
+    <td>{{ r.id }}</td>
+    <td>{{ d.name }}</td>
+    <td>{{ r.subdomain }}</td>
+    <td>{{ d.name if r.subdomain in ["@", ""] else r.subdomain ~ "." ~ d.name }}</td>
+    <td>{{ r.backend_url }}</td>
+    <td>
+      <form method="post" action="/http/{{r.id}}/delete"><button>delete</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

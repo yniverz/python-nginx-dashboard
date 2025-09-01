@@ -1,0 +1,37 @@
+{% extends "_layout.html" %}
+{% block content %}
+<h1>stream routes</h1>
+
+<h2>add</h2>
+<form method="post" action="/stream">
+  <label>domain
+    <select name="domain_id">
+      {% for d in domains %}
+      <option value="{{d.id}}">{{d.name}}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>subdomain <input name="subdomain" placeholder="mc"></label>
+  <label>port <input name="port" type="number" placeholder="25565"></label>
+  <label>target <input name="target" placeholder="127.0.0.1:25565"></label>
+  <label>srv_record <input name="srv_record" placeholder="_minecraft._tcp"></label>
+  <button type="submit">create</button>
+</form>
+
+<h2>list</h2>
+<table>
+  <tr><th>id</th><th>domain</th><th>subdomain</th><th>fqdn</th><th>port</th><th>target</th><th>SRV</th><th>actions</th></tr>
+  {% for d, r in routes %}
+  <tr>
+    <td>{{ r.id }}</td>
+    <td>{{ d.name }}</td>
+    <td>{{ r.subdomain }}</td>
+    <td>{{ d.name if r.subdomain in ["@", ""] else r.subdomain ~ "." ~ d.name }}</td>
+    <td>{{ r.port }}</td>
+    <td>{{ r.target }}</td>
+    <td>{{ r.srv_record or "-" }}</td>
+    <td><form method="post" action="/stream/{{r.id}}/delete"><button>delete</button></form></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -4,6 +4,10 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
 # App files
+/old
+/old2
+/var
+/.venv
 config.json
 proxy_map_new.json
 

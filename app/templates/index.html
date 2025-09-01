@@ -1,0 +1,8 @@
+{% extends "_layout.html" %}
+{% block content %}
+<h1>dashboard</h1>
+<p>domains: {{ domains|length }} | http routes: {{ http_count }} | stream routes: {{ stream_count }}</p>
+<form method="post" action="/reconcile">
+  <button type="submit">reconcile all</button>
+</form>
+{% endblock %}
