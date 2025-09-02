@@ -1,8 +1,0 @@
-body { font-family: system-ui, sans-serif; margin: 1.5rem; }
-header { margin-bottom: 1rem; }
-nav a { margin-right: .75rem; }
-table { border-collapse: collapse; width: 100%; margin-top: .5rem; }
-td, th { border: 1px solid #ddd; padding: .4rem .5rem; }
-form { margin: .4rem 0; }
-label { margin-right: .6rem; }
-button { cursor: pointer; }
