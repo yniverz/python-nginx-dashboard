@@ -1,0 +1,24 @@
+<h2>Log in</h2>
+
+<form method="post" action="/login" class="form-box">
+  <input type="hidden" name="next" value="{{ next_url }}"/>
+
+  <div class="form-group">
+    <label for="username">Username or Email</label>
+    <input id="username" name="username" type="text" required autocomplete="username" />
+  </div>
+
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required autocomplete="current-password" />
+  </div>
+
+  <div class="form-group checkbox">
+    <label>
+      <input type="checkbox" name="remember" value="1" />
+      Remember me
+    </label>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Log in</button>
+</form>

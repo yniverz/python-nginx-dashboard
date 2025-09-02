@@ -9,9 +9,13 @@ class Settings(BaseSettings):
     SQLITE_PATH: str | None = None  # if None, will be data/app.db
     LOCAL_IP: str = os.getenv("LOCAL_IP", "localhost")
 
+    WEB_USERNAME: str = os.getenv("WEB_USERNAME", "admin")
+    WEB_PASSWORD: str = os.getenv("WEB_PASSWORD", "admin")
+
     # Nginx (optional)
     NGINX_HTTP_CONF_PATH: str = "/etc/nginx/conf.d/edge_http.conf"
     NGINX_STREAM_CONF_PATH: str = "/etc/nginx/stream.d/edge_stream.conf"
+    NGINX_SSL_PATH: str = "/etc/nginx/ssl"
     NGINX_RELOAD_CMD: str = "nginx -s reload"
     ENABLE_NGINX: bool = False  # set True when ready
 

@@ -72,6 +72,9 @@ class GatewayConnectionRepo:
     def delete(self, id: int) -> None:
         obj = self.get(id);
         if obj: self.db.delete(obj); self.db.commit()
+    def delete_all_managed_by(self, managed_by: ManagedBy) -> None:
+        self.db.execute(delete(GatewayConnection).where(GatewayConnection.managed_by==managed_by))
+        self.db.commit()
 
 class NginxRouteRepo:
     def __init__(self, db: Session): self.db = db
@@ -106,6 +109,12 @@ class DnsRecordRepo:
         return list(self.db.scalars(select(DnsRecord).where(DnsRecord.domain_id==domain_id)))
     def get(self, id: int) -> DnsRecord | None:
         return self.db.get(DnsRecord, id)
+    def exists(self, domain_id: int, name: str, type: str) -> DnsRecord | None:
+        return self.db.scalar(select(DnsRecord).where(
+            DnsRecord.domain_id==domain_id,
+            DnsRecord.name==name,
+            DnsRecord.type==type
+        ))
     def create(self, rec: DnsRecord) -> DnsRecord:
         self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
     def update(self, rec: DnsRecord) -> DnsRecord:

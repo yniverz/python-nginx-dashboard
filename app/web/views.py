@@ -1,25 +1,22 @@
 from datetime import datetime
 import traceback
+from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from app.persistence.db import SessionLocal, Base, engine
+from app.config import settings
+from app.persistence.db import get_db, Base, engine
 from app.persistence import repos
 from app.persistence.models import (
     Domain, GatewayClient, GatewayConnection, GatewayFlag, GatewayProtocol, GatewayServer, NginxRoute,
     DnsRecord, ManagedBy, NginxRouteHost, NginxRouteProtocol
 )
+from app.services.common import propagate_changes
 
 templates = Jinja2Templates(directory="app/web/templates")
 router = APIRouter()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,6 +26,74 @@ def flash(request: Request, message: str, category: str = "info") -> None:
     bucket = request.session.get("_flashes", [])
     bucket.append({"message": message, "category": category})
     request.session["_flashes"] = bucket
+
+
+def is_safe_path(path: str) -> bool:
+    """Only allow local, absolute paths like '/domains' to prevent open redirects."""
+    if not path:
+        return False
+    parts = urlparse(path)
+    return parts.scheme == "" and parts.netloc == "" and path.startswith("/")
+
+def authenticate(db: Session, username: str, password: str):
+    """
+    Replace this with your real user lookup + password check.
+    For demo purposes, accept admin/admin.
+    """
+    # if username == "admin" and password == "admin":
+    if username == settings.WEB_USERNAME and password == settings.WEB_PASSWORD:
+        return {"id": 1, "username": "admin"}
+    return None
+
+
+@router.get("/login", response_class=HTMLResponse)
+def login_form(request: Request, next: str = "/"):
+    # If already logged in, bounce to next (or /)
+    if request.session.get("user_id"):
+        dest = next if is_safe_path(next) else "/"
+        return RedirectResponse(dest, status_code=303)
+    safe_next = next if is_safe_path(next) else "/"
+    return templates.TemplateResponse(
+        "login.jinja2",
+        {"request": request, "next_url": safe_next},
+    )
+
+@router.post("/login")
+def login_submit(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Form(...),
+    password: str = Form(...),
+    remember: bool = Form(False),
+    next: str = Form("/"),
+):
+    user = authenticate(db, username, password)
+    if not user:
+        flash(request, "Invalid username or password.", "danger")
+        # Re-render form with a 400 for nicer UX and to show the flash
+        safe_next = next if is_safe_path(next) else "/"
+        return templates.TemplateResponse(
+            "login.jinja2",
+            {"request": request, "next_url": safe_next},
+            status_code=400,
+        )
+
+    # Mark session as logged in
+    request.session["user_id"] = str(user["id"])
+    request.session["username"] = user["username"]
+    if remember:
+        # If you want persistent cookies, set max_age on SessionMiddleware in create_app
+        request.session["remember"] = True
+
+    flash(request, f"Welcome back, {user['username']}!", "success")
+    dest = next if is_safe_path(next) else "/"
+    return RedirectResponse(dest, status_code=303)
+
+@router.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    flash(request, "You have been logged out.", "success")
+    return RedirectResponse("/login", status_code=303)
 
 
 
@@ -59,6 +124,9 @@ async def create_domain(request: Request, db: Session = Depends(get_db)):
                 zone_id=form["zone_id"]
             )
         )
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error creating domain: {str(e)}", category="error")
@@ -83,9 +151,13 @@ async def edit_domain(request: Request, domain_id: int, action: str, db: Session
                 repos.DomainRepo(db).update(domain)
         elif action == "delete":
             repos.DomainRepo(db).delete(domain_id)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error updating domain: {str(e)}", category="error")
+
     return RedirectResponse(url="/domains", status_code=303)
 
 
@@ -136,6 +208,9 @@ async def create_proxy(request: Request, proxy_type: str, db: Session = Depends(
                     remote_port=form["remote_port"]
                 )
             )
+
+        propagate_changes(db)
+        
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error creating proxy: {str(e)}", category="error")
@@ -153,6 +228,7 @@ def edit_proxy_server(request: Request, server_id: int, db: Session = Depends(ge
     if not server:
         flash(request, "Server not found", category="error")
         return RedirectResponse(url="/proxies", status_code=303)
+    
     return templates.TemplateResponse("proxies.edit.server.jinja2", {"request": request, "server": server})
 
 @router.post("/proxies/edit/server/{server_id}", response_class=RedirectResponse)
@@ -168,8 +244,10 @@ async def update_proxy_server(request: Request, server_id: int, db: Session = De
         server.host = form["host"]
         server.bind_port = form["bind_port"]
         server.auth_token = form["auth_token"]
-        server.is_origin = form.get("is_origin", "off") == "on"
         repos.GatewayServerRepo(db).update(server)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error updating server: {str(e)}", category="error")
@@ -189,6 +267,9 @@ async def delete_proxy_server(request: Request, server_id: int, db: Session = De
 
     try:
         repos.GatewayServerRepo(db).delete(server.id)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error deleting server: {str(e)}", category="error")
@@ -207,6 +288,7 @@ def edit_proxy_client(request: Request, client_id: int, db: Session = Depends(ge
     if not client:
         flash(request, "Client not found", category="error")
         return RedirectResponse(url="/proxies", status_code=303)
+    
     return templates.TemplateResponse("proxies.edit.client.jinja2", {"request": request, "client": client})
 
 @router.post("/proxies/edit/client/{client_id}", response_class=RedirectResponse)
@@ -220,7 +302,11 @@ async def update_proxy_client(request: Request, client_id: int, db: Session = De
     try:
         client.name = form["name"]
         client.server_id = form["server_id"]
+        client.is_origin = form.get("is_origin", "off") == "on"
         repos.GatewayClientRepo(db).update(client)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error updating client: {str(e)}", category="error")
@@ -240,6 +326,9 @@ async def delete_proxy_client(request: Request, client_id: int, db: Session = De
 
     try:
         repos.GatewayClientRepo(db).delete(client.id)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error deleting client: {str(e)}", category="error")
@@ -347,6 +436,9 @@ async def create_route(request: Request, db: Session = Depends(get_db)):
                 backend_path=form.get("backend_path", "") or "",
             )
         )
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error creating route: {str(e)}", category="error")
@@ -375,6 +467,9 @@ async def toggle_route(request: Request, route_id: int, db: Session = Depends(ge
     try:
         route.active = not route.active
         repos.NginxRouteRepo(db).update(route)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error toggling route: {str(e)}", category="error")
@@ -396,6 +491,9 @@ async def update_route(request: Request, route_id: int, db: Session = Depends(ge
         route.path_prefix = form.get("path_prefix", "/") or "/"
         route.backend_path = form.get("backend_path", "") or ""
         repos.NginxRouteRepo(db).update(route)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error updating route: {str(e)}", category="error")
@@ -406,6 +504,9 @@ async def update_route(request: Request, route_id: int, db: Session = Depends(ge
 async def delete_route(request: Request, route_id: int, db: Session = Depends(get_db)):
     try:
         repos.NginxRouteRepo(db).delete(route_id)
+
+        propagate_changes(db)
+
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error deleting route: {str(e)}", category="error")
@@ -415,7 +516,7 @@ async def delete_route(request: Request, route_id: int, db: Session = Depends(ge
 
 
 ################################
-#         Connections          #
+#         Route Hosts          #
 ################################
 
 
@@ -469,8 +570,6 @@ async def toggle_host(request: Request, route_id: int, host_id: int, db: Session
 
 @router.post("/routes/edit/{route_id}/hosts/{host_id}/delete", response_class=RedirectResponse)
 async def delete_host(request: Request, route_id: int, host_id: int, db: Session = Depends(get_db)):
-    form = await request.form()
-
     route = repos.NginxRouteRepo(db).get(route_id)
     if not route:
         flash(request, "Route not found", category="error")

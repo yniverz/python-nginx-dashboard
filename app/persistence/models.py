@@ -45,7 +45,6 @@ class GatewayServer(Base):
     host: Mapped[str] = mapped_column(String(45))
     bind_port: Mapped[int] = mapped_column(Integer)
     auth_token: Mapped[str] = mapped_column(String(128))
-    is_origin: Mapped[bool] = mapped_column(Boolean, default=False)
     last_config_pull_time: Mapped[datetime | None] = mapped_column(DateTime)
 
 class GatewayClient(Base):
@@ -53,6 +52,7 @@ class GatewayClient(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(64))
     server_id: Mapped[int] = mapped_column(ForeignKey("gateway_servers.id"))
+    is_origin: Mapped[bool] = mapped_column(Boolean, default=False)
     last_config_pull_time: Mapped[datetime | None] = mapped_column(DateTime)
 
     server: Mapped[GatewayServer] = relationship(backref="clients", lazy="joined")

@@ -7,3 +7,11 @@ class Base(DeclarativeBase):
 
 engine = create_engine(f"sqlite:///{settings.db_path()}", echo=False, future=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

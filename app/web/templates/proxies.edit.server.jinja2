@@ -19,10 +19,6 @@
     <input type="text" id="auth_token" name="auth_token" value="{{ server.auth_token }}" required>
     <br>
 
-    <label for="is_origin">Is Origin:</label>
-    <input type="checkbox" id="is_origin" name="is_origin" {% if server.is_origin %}checked{% endif %}>
-    <br>
-
     <button type="submit">Save</button>
     <a href="{{ url_for('view_proxies') }}">Cancel</a>
 </form>

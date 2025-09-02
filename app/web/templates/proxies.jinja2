@@ -73,6 +73,7 @@
             <tr>
                 <th>Name</th>
                 <th>Server</th>
+                <th>Is Origin</th>
                 <th>Last Queried</th>
                 <th>Actions</th>
             </tr>
@@ -82,6 +83,7 @@
             <tr>
                 <td>{{ client.name }}</td>
                 <td>{{ client.server.name }}</td>
+                <td>{{ client.is_origin }}</td>
                 <td>
                     {% if client.last_config_pull_time %}
                         {{ (now - client.last_config_pull_time).total_seconds() }} seconds ago
@@ -118,7 +120,6 @@
                 <th>Host</th>
                 <th>Bind Port</th>
                 <th>Auth Token</th>
-                <th>Is Origin</th>
                 <th>Last Queried</th>
                 <th>Actions</th>
             </tr>
@@ -130,7 +131,6 @@
                 <td>{{ server.host }}</td>
                 <td>{{ server.bind_port }}</td>
                 <td>{{ server.auth_token }}</td>
-                <td>{{ server.is_origin }}</td>
                 {% if server.last_config_pull_time %}
                     <td>{{ (now - server.last_config_pull_time).total_seconds() }} seconds ago</td>
                 {% else %}

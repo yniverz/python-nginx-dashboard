@@ -47,16 +47,16 @@
 <h2>Add New Route</h2>
 <form method="post" action="{{ url_for('create_route') }}">
     <div>
+        <label for="subdomain">Subdomain:</label>
+        <input type="text" id="subdomain" name="subdomain">
+    </div>
+    <div>
         <label for="domain_id">Domain:</label>
         <select id="domain_id" name="domain_id">
             {% for domain in domains %}
             <option value="{{ domain.id }}">{{ domain.name }}</option>
             {% endfor %}
         </select>
-    </div>
-    <div>
-        <label for="subdomain">Subdomain:</label>
-        <input type="text" id="subdomain" name="subdomain">
     </div>
     <div>
         <label for="protocol">Protocol:</label>
