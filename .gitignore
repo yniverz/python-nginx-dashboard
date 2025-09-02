@@ -6,6 +6,7 @@
 # App files
 /old
 /old2
+/old3
 /var
 /.venv
 config.json
