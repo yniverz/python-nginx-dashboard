@@ -3,30 +3,6 @@
 {% block content %}
 <h1>Edit Route</h1>
 
-
-{# # class NginxRouteHost(Base):
-#     __tablename__ = "nginx_route_hosts"
-#     id: Mapped[int] = mapped_column(primary_key=True)
-#     route_id: Mapped[int] = mapped_column(ForeignKey("nginx_routes.id"))
-#     host: Mapped[str] = mapped_column(String(255))
-#     weight: Mapped[int | None] = mapped_column(Integer)
-#     max_fails: Mapped[int | None] = mapped_column(Integer)
-#     fail_timeout: Mapped[int | None] = mapped_column(Integer)
-#     is_backup: Mapped[bool] = mapped_column(Boolean, default=False)
-#     active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-# class NginxRoute(Base):
-#     __tablename__ = "nginx_routes"
-#     id: Mapped[int] = mapped_column(primary_key=True)
-#     domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id"))
-#     subdomain: Mapped[str] = mapped_column(String(255))  # "@", "app", "api.v2"
-#     protocol: Mapped[NginxRouteProtocol] = mapped_column(Enum(NginxRouteProtocol), default=NginxRouteProtocol.HTTP)
-#     path_prefix: Mapped[str] = mapped_column(String(255), default="/")
-#     backend_path: Mapped[str] = mapped_column(String(255), default="")
-#     hosts: Mapped[list[NginxRouteHost]] = relationship(backref="nginx_route", cascade="all, delete-orphan", lazy="joined")
-#     active: Mapped[bool] = mapped_column(Boolean, default=True)
-#     __table_args__ = (UniqueConstraint("domain_id", "subdomain", "path_prefix", name="uq_http_sub_path_by_domain"),) #}
-
 <form method="post" action="">
     <div>
         <label for="domain_id">Domain:</label>
@@ -58,6 +34,8 @@
     </div>
     <button type="submit">Save</button>
 </form>
+
+<a href="{{ url_for('delete_route', route_id=route.id) }}" onclick="return confirm('Are you sure?');">Delete</a>
 
 <h2>Hosts</h2>
 <table>

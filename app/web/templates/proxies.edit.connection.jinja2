@@ -2,21 +2,6 @@
 
 {% block title %}Edit Proxy Connection{% endblock %}
 
-{# class GatewayConnection(Base):
-    __tablename__ = "gateway_connections"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(64))
-    client_id: Mapped[int] = mapped_column(ForeignKey("gateway_clients.id"))
-    protocol: Mapped[GatewayProtocols] = mapped_column(Enum(GatewayProtocols))
-    local_ip: Mapped[str] = mapped_column(String(45))
-    local_port: Mapped[int] = mapped_column(Integer)
-    remote_port: Mapped[int] = mapped_column(Integer)
-    flags: Mapped[list[GatewayFlag]] = mapped_column(JSON, default=[])
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    client: Mapped[GatewayClient] = relationship(backref="connections", lazy="joined")
-    server: Mapped[GatewayServer] = relationship(secondary="gateway_clients", viewonly=True, lazy="joined") #}
-
 {% block content %}
 <h2>Edit Proxy Connection</h2>
 <form method="post" action="">

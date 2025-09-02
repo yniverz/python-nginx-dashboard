@@ -12,7 +12,11 @@
                 <option value="{{ client.id }}">{{ client.name }}</option>
             {% endfor %}
         </select>
-        <input type="text" name="protocol" placeholder="Protocol" required>
+        <select name="protocol" required>
+            {% for protocol in protocols %}
+                <option value="{{ protocol }}">{{ protocol }}</option>
+            {% endfor %}
+        </select>
         <input type="text" name="local_ip" placeholder="Local IP" required>
         <input type="number" name="local_port" placeholder="Local Port" required>
         <input type="number" name="remote_port" placeholder="Remote Port" required>
@@ -27,17 +31,19 @@
                 <th>Protocol</th>
                 <th>Local Address</th>
                 <th>Remote Port</th>
+                <th>Managed By</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for proxy in connections %}
-            <tr>
+            <tr {% if proxy.managed_by != ManagedBy.USER %}class="muted"{% endif %}>
                 <td>{{ proxy.name }}</td>
                 <td>{{ proxy.client.name }}</td>
-                <td>{{ proxy.protocol }}</td>
+                <td>{{ proxy.protocol.name }}</td>
                 <td>{{ proxy.local_ip }}:{{ proxy.local_port }}</td>
                 <td>{{ proxy.remote_port }}</td>
+                <td>{{ proxy.managed_by.name }}</td>
                 <td>
                     <a href="/proxies/edit/connection/{{ proxy.id }}">Edit</a>
                 </td>
@@ -45,7 +51,7 @@
             {% endfor %}
             {% if not connections %}
                 <tr>
-                    <td colspan="6">No gateway connections found.</td>
+                    <td colspan="7">No gateway connections found.</td>
                 </tr>
             {% endif %}
         </tbody>

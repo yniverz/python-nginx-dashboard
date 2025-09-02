@@ -101,7 +101,8 @@ def view_proxies(request: Request, db: Session = Depends(get_db)):
     servers = repos.GatewayServerRepo(db).list_all()
     clients = repos.GatewayClientRepo(db).list_all()
     connections = repos.GatewayConnectionRepo(db).list_all()
-    return templates.TemplateResponse("proxies.jinja2", {"request": request, "servers": servers, "clients": clients, "connections": connections, "now": datetime.now()})
+    protocols = [e.value for e in GatewayProtocol]
+    return templates.TemplateResponse("proxies.jinja2", {"request": request, "servers": servers, "clients": clients, "connections": connections, "protocols": protocols, "ManagedBy": ManagedBy, "now": datetime.now()})
 
 
 @router.post("/proxies/create/{proxy_type}", response_class=RedirectResponse)
@@ -258,10 +259,8 @@ def edit_proxy_connection(request: Request, connection_id: int, db: Session = De
     if not connection:
         flash(request, "Connection not found", category="error")
         return RedirectResponse(url="/proxies", status_code=303)
-    # get clients, protocols, flags
+    
     clients = repos.GatewayClientRepo(db).list_all()
-    # protocols = list(GatewayProtocol)
-    # flags = list(GatewayFlag)
     protocols = [e.value for e in GatewayProtocol]
     flags = [e.value for e in GatewayFlag]
     print(connection.flags)
@@ -273,6 +272,10 @@ async def update_proxy_connection(request: Request, connection_id: int, db: Sess
     connection = repos.GatewayConnectionRepo(db).get(connection_id)
     if not connection:
         flash(request, "Connection not found", category="error")
+        return RedirectResponse(url="/proxies", status_code=303)
+
+    if connection.managed_by is not ManagedBy.USER:
+        flash(request, "You are not allowed to edit this connection", category="error")
         return RedirectResponse(url="/proxies", status_code=303)
 
     try:
@@ -298,6 +301,10 @@ async def delete_proxy_connection(request: Request, connection_id: int, db: Sess
     connection = repos.GatewayConnectionRepo(db).get(connection_id)
     if not connection:
         flash(request, "Connection not found", category="error")
+        return RedirectResponse(url="/proxies", status_code=303)
+
+    if connection.managed_by is not ManagedBy.USER:
+        flash(request, "You are not allowed to delete this connection", category="error")
         return RedirectResponse(url="/proxies", status_code=303)
 
     try:
@@ -524,36 +531,36 @@ async def create_dns_record(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/dns/edit/{record_id}", response_class=HTMLResponse)
 async def get_edit_dns_record(request: Request, record_id: int, db: Session = Depends(get_db)):
-    dns_record = repos.DnsRecordRepo(db).get(record_id)
-    if not dns_record:
+    record = repos.DnsRecordRepo(db).get(record_id)
+    if not record:
         flash(request, "DNS record not found", category="error")
         return RedirectResponse(url="/dns", status_code=303)
 
     domains = repos.DomainRepo(db).list_all()
-    return templates.TemplateResponse("dns.edit.jinja2", {"request": request, "dns_record": dns_record, "domains": domains})
+    return templates.TemplateResponse("dns.edit.jinja2", {"request": request, "record": record, "domains": domains})
 
 @router.post("/dns/edit/{record_id}", response_class=RedirectResponse)
 async def edit_dns_record(request: Request, record_id: int, db: Session = Depends(get_db)):
     form = await request.form()
     try:
-        dns_record = repos.DnsRecordRepo(db).get(record_id)
-        if not dns_record:
+        record = repos.DnsRecordRepo(db).get(record_id)
+        if not record:
             flash(request, "DNS record not found", category="error")
             return RedirectResponse(url="/dns", status_code=303)
 
-        if dns_record.managed_by != "USER":
+        if record.managed_by != "USER":
             flash(request, "You are not allowed to edit this DNS record", category="error")
             return RedirectResponse(url="/dns", status_code=303)
 
-        dns_record.name = form["name"]
-        dns_record.domain_id = form["domain_id"]
-        dns_record.type = form["type"]
-        dns_record.content = form["content"]
-        dns_record.ttl = int(form["ttl"])
-        dns_record.priority = int(form["priority"]) if form.get("priority") else None
-        dns_record.proxied = form.get("proxied", "off") == "on"
+        record.name = form["name"]
+        record.domain_id = form["domain_id"]
+        record.type = form["type"]
+        record.content = form["content"]
+        record.ttl = int(form["ttl"])
+        record.priority = int(form["priority"]) if form.get("priority") else None
+        record.proxied = form.get("proxied", "off") == "on"
 
-        repos.DnsRecordRepo(db).update(dns_record)
+        repos.DnsRecordRepo(db).update(record)
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error editing DNS record: {str(e)}", category="error")

@@ -73,6 +73,7 @@ class GatewayConnection(Base):
     local_port: Mapped[int] = mapped_column(Integer)
     remote_port: Mapped[int] = mapped_column(Integer)
     flags: Mapped[list[GatewayFlag]] = mapped_column(JSON, default=[])
+    managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy), default=ManagedBy.USER)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     client: Mapped[GatewayClient] = relationship(backref="connections", lazy="joined")
