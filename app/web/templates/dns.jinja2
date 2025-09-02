@@ -79,7 +79,7 @@ class DnsRecord(Base):
     <tbody>
         {% for record in dns_records %}
         <tr {% if record.managed_by != "USER" %}class="muted"{% endif %}>
-            <td>{{ record.name }}</td>
+            <td style="text-align: right;">{{ record.name }}</td>
             <td>{{ record.domain.name }}</td>
             <td>{{ record.type.name }}</td>
             <td>{{ record.content }}</td>

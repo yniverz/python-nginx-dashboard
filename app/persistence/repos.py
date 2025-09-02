@@ -79,9 +79,11 @@ class GatewayConnectionRepo:
 class NginxRouteRepo:
     def __init__(self, db: Session): self.db = db
     def list_all(self) -> list[NginxRoute]:
-        return list(self.db.scalars(select(NginxRoute).options(selectinload(NginxRoute.hosts)).order_by(NginxRoute.subdomain)))
+        return list(self.db.scalars(select(NginxRoute).options(selectinload(NginxRoute.hosts))))
+    def list_all_active(self) -> list[NginxRoute]:
+        return list(self.db.scalars(select(NginxRoute).where(NginxRoute.active==True).options(selectinload(NginxRoute.hosts))))
     def list_by_domain(self, domain_id: int) -> list[NginxRoute]:
-        return list(self.db.scalars(select(NginxRoute).where(NginxRoute.domain_id==domain_id).options(selectinload(NginxRoute.hosts))).order_by(NginxRoute.subdomain))
+        return list(self.db.scalars(select(NginxRoute).where(NginxRoute.domain_id==domain_id).options(selectinload(NginxRoute.hosts))))
     def get(self, id: int) -> NginxRoute | None:
         return self.db.get(NginxRoute, id)
     def update(self, r: NginxRoute) -> NginxRoute:
@@ -128,3 +130,5 @@ class DnsRecordRepo:
         self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
     def delete_user(self, id: int) -> None:
         self.db.execute(delete(DnsRecord).where(DnsRecord.id==id, DnsRecord.managed_by==ManagedBy.USER)); self.db.commit()
+    def delete_all_managed_by(self, managed_by: ManagedBy) -> None:
+        self.db.execute(delete(DnsRecord).where(DnsRecord.managed_by==managed_by)); self.db.commit()

@@ -12,7 +12,7 @@ from pathlib import Path
 import datetime
 import subprocess
 import ipaddress
-
+from app.config import settings
 
 
 
@@ -102,9 +102,22 @@ def _fetch_cidr_list(url: str) -> list[str]:
 
 
 
+cloudflare_ip_cache = CloudflareIPCache()
+cloudflare_ip_cache.get()
 
 
 
+class CloudFlareManager:
+    """Manage Cloudflare DNS records."""
+
+    def __init__(self, db: requests.Session):
+        self.db = db
+        self.cf = settings.CF
+
+        print(self._get_entries())
+
+    def _get_entries(self):
+        return self.cf.dns.records.list(zone_id=self.zone_id)
 
 
 

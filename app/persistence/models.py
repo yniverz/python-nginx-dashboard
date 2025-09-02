@@ -33,7 +33,7 @@ class DnsRecord(Base):
     managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy), default=ManagedBy.USER)
     meta: Mapped[dict | None] = mapped_column(JSON)
 
-    __table_args__ = (UniqueConstraint("domain_id", "name", "type", name="uq_dns_key"),)
+    __table_args__ = (UniqueConstraint("domain_id", "name", "type", "content", name="uq_dns_key"),)
 
     domain: Mapped[Domain] = relationship(backref="dns_records", lazy="joined")
 
@@ -94,6 +94,7 @@ class NginxRouteProtocol(str, enum.Enum):
     HTTP = "HTTP"
     HTTPS = "HTTPS"
     STREAM = "STREAM"
+    REDIRECT = "REDIRECT"
 
 class NginxRoute(Base):
     __tablename__ = "nginx_routes"

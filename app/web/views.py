@@ -1,4 +1,5 @@
 from datetime import datetime
+import threading
 import traceback
 from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Depends, Form
@@ -13,6 +14,7 @@ from app.persistence.models import (
     DnsRecord, ManagedBy, NginxRouteHost, NginxRouteProtocol
 )
 from app.services.common import propagate_changes
+from app.services.nginx import background_publish
 
 templates = Jinja2Templates(directory="app/web/templates")
 router = APIRouter()
@@ -101,6 +103,26 @@ def logout(request: Request):
 def view_dashboard(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("dashboard.jinja2", {"request": request})
 
+
+
+@router.get("/publish", response_class=HTMLResponse)
+def view_publish(request: Request, db: Session = Depends(get_db)):
+    propagate_changes(db)
+    threading.Thread(target=background_publish).start()
+    
+    return HTMLResponse("""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="5;url=/">
+    <title>Publishing...</title>
+</head>
+<body>
+    <h1>Publishing...</h1>
+    <p>Your changes are being published. You will be redirected shortly.</p>
+</body>
+</html>
+""")
 
 
 
@@ -228,7 +250,7 @@ def edit_proxy_server(request: Request, server_id: int, db: Session = Depends(ge
     if not server:
         flash(request, "Server not found", category="error")
         return RedirectResponse(url="/proxies", status_code=303)
-    
+
     return templates.TemplateResponse("proxies.edit.server.jinja2", {"request": request, "server": server})
 
 @router.post("/proxies/edit/server/{server_id}", response_class=RedirectResponse)
@@ -289,7 +311,9 @@ def edit_proxy_client(request: Request, client_id: int, db: Session = Depends(ge
         flash(request, "Client not found", category="error")
         return RedirectResponse(url="/proxies", status_code=303)
     
-    return templates.TemplateResponse("proxies.edit.client.jinja2", {"request": request, "client": client})
+    servers = repos.GatewayServerRepo(db).list_all()
+
+    return templates.TemplateResponse("proxies.edit.client.jinja2", {"request": request, "client": client, "servers": servers})
 
 @router.post("/proxies/edit/client/{client_id}", response_class=RedirectResponse)
 async def update_proxy_client(request: Request, client_id: int, db: Session = Depends(get_db)):

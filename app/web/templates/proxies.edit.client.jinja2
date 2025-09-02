@@ -10,15 +10,19 @@
         <input type="text" id="name" name="name" value="{{ client.name }}" required>
     </div>
     <div>
-        <label for="address">Client Address:</label>
-        <input type="text" id="address" name="address" value="{{ client.address }}" required>
+        <label for="address">Server:</label>
+        <select name="server_id" required>
+            {% for server in servers %}
+                <option value="{{ server.id }}" {% if server.id == client.server.id %}selected{% endif %}>{{ server.name }}</option>
+            {% endfor %}
+        </select>
     </div>
 
     <div>
         <label for="is_origin">Is Origin:</label>
         <input type="checkbox" id="is_origin" name="is_origin" {% if client.is_origin %}checked{% endif %}>
     </div>
-    
+
     <button type="submit">Save</button>
     <a href="{{ url_for('view_proxies') }}">Cancel</a>
 </form>

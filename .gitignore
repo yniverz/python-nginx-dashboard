@@ -10,6 +10,7 @@
 /data
 /var
 /.venv
+/.env
 config.json
 proxy_map_new.json
 

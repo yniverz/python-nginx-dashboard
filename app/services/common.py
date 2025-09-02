@@ -11,7 +11,7 @@ from app.persistence.db import get_db
 from app.persistence.models import DnsRecord, GatewayConnection, GatewayProtocol, ManagedBy
 
 
-def propagate_changes(db: Session = Depends(get_db)):
+def propagate_changes(db: Session):
     # Propagator:
     # For every proxy client
     # - Is origin?
@@ -20,6 +20,8 @@ def propagate_changes(db: Session = Depends(get_db)):
     origin_ips = []
 
     repos.GatewayConnectionRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
+    repos.DnsRecordRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
+
     for client in repos.GatewayClientRepo(db).list_all():
         if client.is_origin:
             conn_name = f"origin_{client.server.name}_80"
@@ -89,7 +91,7 @@ def propagate_changes(db: Session = Depends(get_db)):
         # or if it is "b.a" and one exists with "c.b.a"
         is_multilevel = False
         for other_route in repos.NginxRouteRepo(db).list_by_domain(route.domain_id):
-            if other_route.subdomain != route.subdomain and other_route.subdomain.endswith(f".{route.subdomain}"):
+            if other_route.subdomain != route.subdomain and other_route.subdomain.endswith(f".{route.subdomain}") and route.domain.use_for_direct_prefix:
                 is_multilevel = True
                 break
 
@@ -97,8 +99,32 @@ def propagate_changes(db: Session = Depends(get_db)):
             for ip in origin_ips:
                 repos.DnsRecordRepo(db).create(
                     DnsRecord(
+                        domain_id=route.domain.id,
+                        name=f"*.{route.subdomain}",
+                        type="A",
+                        content=ip,
+                        proxied=True,
+                        managed_by=ManagedBy.SYSTEM,
+                    )
+                )
+
+    for domain in repos.DomainRepo(db).list_all():
+        for ip in origin_ips:
+            repos.DnsRecordRepo(db).create(
+                DnsRecord(
+                    domain_id=domain.id,
+                    name=f"@",
+                    type="A",
+                    content=ip,
+                    proxied=True,
+                    managed_by=ManagedBy.SYSTEM,
+                )
+            )
+            if domain.use_for_direct_prefix:
+                repos.DnsRecordRepo(db).create(
+                    DnsRecord(
                         domain_id=domain.id,
-                        name=route.subdomain,
+                        name=f"*",
                         type="A",
                         content=ip,
                         proxied=True,

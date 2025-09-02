@@ -2,6 +2,7 @@ import os
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from pathlib import Path
+import cloudflare
 
 class Settings(BaseSettings):
     APP_NAME: str = "Multi-Domain Edge Manager"
@@ -27,6 +28,16 @@ class Settings(BaseSettings):
     CF_REQUESTED_VALIDITY_DAYS: int = int(os.getenv("CF_REQUESTED_VALIDITY_DAYS", "5475"))  # ~15y
     CF_KEY_TYPE: str = os.getenv("CF_KEY_TYPE", "rsa")  # "rsa" or "ecdsa"
     CF_RSA_BITS: int = int(os.getenv("CF_RSA_BITS", "2048"))  # 2048 or 4096
+
+    CF: cloudflare.Cloudflare | None = None
+
+    def model_post_init(self, __context):
+        self.CF = cloudflare.Cloudflare(
+            api_token=self.CLOUDFLARE_API_TOKEN,
+            user_service_key=self.CF_ORIGIN_CA_KEY
+        )
+
+        return super().model_post_init(__context)
 
     def db_path(self) -> str:
         if self.SQLITE_PATH:
