@@ -1,27 +1,23 @@
-from fastapi import FastAPI
+from uuid import uuid4
+from fastapi import FastAPI, Request
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from app.db import engine
-from app.models import Base
-from app.routers import admin, domains, http_routes, stream_routes, dns
+from app.web import views#, api
 
 def create_app() -> FastAPI:
-    # create DB tables on boot (no external DB server)
-    Base.metadata.create_all(bind=engine)
+    app = FastAPI(title="Multi-Domain Edge Manager")
+    @app.middleware("http")
+    async def load_flash_messages(request: Request, call_next):
+        # Pop any pending flashes at the start of the request
+        flashes = request.session.pop("_flashes", [])
+        request.state.flash_messages = flashes
+        response = await call_next(request)
+        return response
+    app.add_middleware(SessionMiddleware, secret_key=uuid4().hex)
+    # app.include_router(api.router)
+    app.include_router(views.router)
+    app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 
-    app = FastAPI(title="multi-domain-proxy")
-    app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    app.include_router(admin.router)
-    app.include_router(domains.router)
-    app.include_router(http_routes.router)
-    app.include_router(stream_routes.router)
-    app.include_router(dns.router)
+    
     return app
+

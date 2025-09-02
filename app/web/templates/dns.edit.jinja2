@@ -1,0 +1,35 @@
+{% extends "_layout.jinja2" %}
+
+{% block content %}
+<h1>Edit DNS Record</h1>
+
+<form method="POST" action="{{ url_for('edit_dns_record', record_id=dns_record.id) }}">
+    <label for="name">Name</label>
+    <input type="text" name="name" placeholder="Name" value="{{ dns_record.name }}" required><br>
+    <label for="domain_id">Domain</label>
+    <select name="domain_id" required>
+        {% for domain in domains %}
+        <option value="{{ domain.id }}" {% if domain.id == dns_record.domain_id %}selected{% endif %}>{{ domain.name }}</option>
+        {% endfor %}
+    </select><br>
+    <label for="type">Type</label>
+    <select name="type" required>
+        <option value="A" {% if dns_record.type == "A" %}selected{% endif %}>A</option>
+        <option value="AAAA" {% if dns_record.type == "AAAA" %}selected{% endif %}>AAAA</option>
+        <option value="CNAME" {% if dns_record.type == "CNAME" %}selected{% endif %}>CNAME</option>
+        <option value="TXT" {% if dns_record.type == "TXT" %}selected{% endif %}>TXT</option>
+        <option value="MX" {% if dns_record.type == "MX" %}selected{% endif %}>MX</option>
+        <option value="NS" {% if dns_record.type == "NS" %}selected{% endif %}>NS</option>
+        <option value="SRV" {% if dns_record.type == "SRV" %}selected{% endif %}>SRV</option>
+    </select><br>
+    <label for="content">Content</label>
+    <input type="text" name="content" placeholder="Content" value="{{ dns_record.content }}" required><br>
+    <label for="ttl">TTL</label>
+    <input type="number" name="ttl" placeholder="TTL" value="{{ dns_record.ttl }}" required><br>
+    <label for="priority">Priority</label>
+    <input type="number" name="priority" placeholder="Priority" value="{{ dns_record.priority }}"><br>
+    <label for="proxied">Proxied</label>
+    <input type="checkbox" name="proxied" {% if dns_record.proxied %}checked{% endif %}><br>
+    <button type="submit">Save Changes</button>
+</form>
+{% endblock %}

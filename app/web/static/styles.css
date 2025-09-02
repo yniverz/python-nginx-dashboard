@@ -1,0 +1,40 @@
+.alert {
+    position: relative;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+}
+
+.alert-error {
+    background-color: lightcoral;
+    border-color: darkred;
+    color: black;
+}
+
+.alert-info {
+    background-color: lightblue;
+    border-color: darkblue;
+    color: black;
+}
+
+.alert-success {
+    background-color: lightgreen;
+    border-color: darkgreen;
+    color: black;
+}
+
+table, th, td {
+  border: 1px solid;
+}
+
+td, th {
+  padding: 0.5rem;
+}
+
+
+.muted {
+    color: grey;
+    opacity: 0.6;
+    pointer-events: none;
+}

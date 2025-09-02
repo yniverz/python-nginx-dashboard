@@ -1,0 +1,101 @@
+{% extends "_layout.jinja2" %}
+
+{% block content %}
+<h1>DNS</h1>
+
+
+{# class ManagedBy(str, enum.Enum):
+    SYSTEM = "SYSTEM"
+    USER = "USER"
+    IMPORTED = "IMPORTED"
+
+class DnsType(str, enum.Enum):
+    A="A"; AAAA="AAAA"; CNAME="CNAME"; TXT="TXT"; MX="MX"; NS="NS"; SRV="SRV"
+
+class Domain(Base):
+    __tablename__ = "domains"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    zone_id: Mapped[str | None] = mapped_column(String(128))
+    auto_wildcard: Mapped[bool] = mapped_column(Boolean, default=True)
+    use_for_direct_prefix: Mapped[bool] = mapped_column(Boolean, default=False)
+
+class DnsRecord(Base):
+    __tablename__ = "dns_records"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id"))
+    name: Mapped[str] = mapped_column(String(255))      # relative: "@", "api", "foo.bar"
+    type: Mapped[DnsType] = mapped_column(Enum(DnsType))
+    content: Mapped[str] = mapped_column(String(1024))  # IP, target FQDN, or SRV JSON
+    ttl: Mapped[int | None] = mapped_column(Integer)    # seconds
+    priority: Mapped[int | None] = mapped_column(Integer)
+    proxied: Mapped[bool | None] = mapped_column(Boolean)
+    managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy), default=ManagedBy.USER)
+    meta: Mapped[dict | None] = mapped_column(JSON)
+
+    __table_args__ = (UniqueConstraint("domain_id", "name", "type", name="uq_dns_key"),)
+
+    domain: Mapped[Domain] = relationship(backref="dns_records", lazy="joined") #}
+
+<form method="POST" action="{{ url_for('create_dns_record') }}">
+    <input type="text" name="name" placeholder="Name" required>
+    <select name="domain_id" required>
+        {% for domain in domains %}
+        <option value="{{ domain.id }}">{{ domain.name }}</option>
+        {% endfor %}
+    </select>
+    <select name="type" required>
+        <option value="A">A</option>
+        <option value="AAAA">AAAA</option>
+        <option value="CNAME">CNAME</option>
+        <option value="TXT">TXT</option>
+        <option value="MX">MX</option>
+        <option value="NS">NS</option>
+        <option value="SRV">SRV</option>
+    </select>
+    <input type="text" name="content" placeholder="Content" required>
+    <input type="number" name="ttl" placeholder="TTL" value="3600" required>
+    <input type="number" name="priority" placeholder="Priority">
+    <input type="checkbox" name="proxied" value="true"> Proxied
+    <input type="hidden" name="managed_by" value="USER">
+    <button type="submit">Add Record</button>
+</form>
+<br>
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Domain</th>
+            <th>Type</th>
+            <th>Content</th>
+            <th>TTL</th>
+            <th>Priority</th>
+            <th>Proxied</th>
+            <th>Managed By</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for record in dns_records %}
+        <tr {% if record.managed_by != "USER" %}class="muted"{% endif %}>
+            <td>{{ record.name }}</td>
+            <td>{{ record.domain.name }}</td>
+            <td>{{ record.type.name }}</td>
+            <td>{{ record.content }}</td>
+            <td>{{ record.ttl }}</td>
+            <td>{{ record.priority }}</td>
+            <td>{{ record.proxied }}</td>
+            <td>{{ record.managed_by.name }}</td>
+            <td>
+                <a href="{{ url_for('edit_dns_record', record_id=record.id) }}">Edit</a>
+                <form method="POST" action="{{ url_for('delete_dns_record', record_id=record.id) }}">
+                    <button type="submit" class="btn btn-link" onclick="return confirm('Are you sure you want to delete this record?')">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

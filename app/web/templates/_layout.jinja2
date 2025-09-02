@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Domain Manager</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header>
+    <h1>Domain Manager</h1>
+    <nav>
+      <a href="/">Dashboard</a> |
+      <a href="/domains">Domains</a> |
+      <a href="/proxies">Proxies</a> |
+      <a href="/routes">Routes</a> |
+      <a href="/dns">DNS</a>
+    </nav>
+  </header>
+  <main>
+    {% if request.state.flash_messages %}
+    <br>
+    <div class="flash-container">
+        {% for msg in request.state.flash_messages %}
+        <div class="alert alert-{{ msg.category }}">
+            {{ msg.message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <br>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,76 @@
+{% extends "_layout.jinja2" %}
+
+{% block title %}Edit Proxy Connection{% endblock %}
+
+{# class GatewayConnection(Base):
+    __tablename__ = "gateway_connections"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64))
+    client_id: Mapped[int] = mapped_column(ForeignKey("gateway_clients.id"))
+    protocol: Mapped[GatewayProtocols] = mapped_column(Enum(GatewayProtocols))
+    local_ip: Mapped[str] = mapped_column(String(45))
+    local_port: Mapped[int] = mapped_column(Integer)
+    remote_port: Mapped[int] = mapped_column(Integer)
+    flags: Mapped[list[GatewayFlag]] = mapped_column(JSON, default=[])
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    client: Mapped[GatewayClient] = relationship(backref="connections", lazy="joined")
+    server: Mapped[GatewayServer] = relationship(secondary="gateway_clients", viewonly=True, lazy="joined") #}
+
+{% block content %}
+<h2>Edit Proxy Connection</h2>
+<form method="post" action="">
+    <div>
+        <label for="name">Connection Name:</label>
+        <input type="text" id="name" name="name" value="{{ connection.name }}" required>
+    </div>
+    <div>
+        <label for="client_id">Client:</label>
+        <select id="client_id" name="client_id" required>
+            <option value="">Select a client</option>
+            {% for client in clients %}
+                <option value="{{ client.id }}" {% if client.id == connection.client_id %}selected{% endif %}>{{ client.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="protocol">Protocol:</label>
+        <select id="protocol" name="protocol" required>
+            <option value="">Select a protocol</option>
+            {% for proto in protocols %}
+                <option value="{{ proto }}" {% if proto == connection.protocol %}selected{% endif %}>{{ proto }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="local_ip">Local IP:</label>
+        <input type="text" id="local_ip" name="local_ip" value="{{ connection.local_ip }}" required>
+    </div>
+    <div>
+        <label for="local_port">Local Port:</label>
+        <input type="number" id="local_port" name="local_port" value="{{ connection.local_port }}" required>
+    </div>
+    <div>
+        <label for="remote_port">Remote Port:</label>
+        <input type="number" id="remote_port" name="remote_port" value="{{ connection.remote_port }}" required>
+    </div>
+    <div>
+        <label>Flags:</label>
+        <div>
+            {% for flag in flags %}
+                <label>
+                    <input type="checkbox" name="flag_{{ loop.index0 }}" value="{{ flag }}" {% if flag in connection.flags %}checked{% endif %}>
+                    {{ flag }}
+                </label>
+                <br>
+            {% endfor %}
+        </div>
+    </div>
+    <button type="submit">Save</button>
+    <a href="{{ url_for('view_proxies') }}">Cancel</a>
+</form>
+
+<form method="post" action="{{ url_for('delete_proxy_connection', connection_id=connection.id) }}" onsubmit="return confirm('Are you sure you want to delete this connection?');">
+    <button type="submit">Delete Connection</button>
+</form>
+{% endblock %}

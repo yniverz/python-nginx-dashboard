@@ -1,0 +1,114 @@
+{% extends "_layout.jinja2" %}
+
+{% block content %}
+<h1>Edit Route</h1>
+
+
+{# # class NginxRouteHost(Base):
+#     __tablename__ = "nginx_route_hosts"
+#     id: Mapped[int] = mapped_column(primary_key=True)
+#     route_id: Mapped[int] = mapped_column(ForeignKey("nginx_routes.id"))
+#     host: Mapped[str] = mapped_column(String(255))
+#     weight: Mapped[int | None] = mapped_column(Integer)
+#     max_fails: Mapped[int | None] = mapped_column(Integer)
+#     fail_timeout: Mapped[int | None] = mapped_column(Integer)
+#     is_backup: Mapped[bool] = mapped_column(Boolean, default=False)
+#     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+# class NginxRoute(Base):
+#     __tablename__ = "nginx_routes"
+#     id: Mapped[int] = mapped_column(primary_key=True)
+#     domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id"))
+#     subdomain: Mapped[str] = mapped_column(String(255))  # "@", "app", "api.v2"
+#     protocol: Mapped[NginxRouteProtocol] = mapped_column(Enum(NginxRouteProtocol), default=NginxRouteProtocol.HTTP)
+#     path_prefix: Mapped[str] = mapped_column(String(255), default="/")
+#     backend_path: Mapped[str] = mapped_column(String(255), default="")
+#     hosts: Mapped[list[NginxRouteHost]] = relationship(backref="nginx_route", cascade="all, delete-orphan", lazy="joined")
+#     active: Mapped[bool] = mapped_column(Boolean, default=True)
+#     __table_args__ = (UniqueConstraint("domain_id", "subdomain", "path_prefix", name="uq_http_sub_path_by_domain"),) #}
+
+<form method="post" action="">
+    <div>
+        <label for="domain_id">Domain:</label>
+        <select id="domain_id" name="domain_id">
+            {% for domain in domains %}
+            <option value="{{ domain.id }}" {% if domain.id == route.domain_id %}selected{% endif %}>{{ domain.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="subdomain">Subdomain:</label>
+        <input type="text" id="subdomain" name="subdomain" value="{{ route.subdomain }}">
+    </div>
+    <div>
+        <label for="protocol">Protocol:</label>
+        <select id="protocol" name="protocol">
+            {% for proto in protocols %}
+            <option value="{{ proto }}" {% if proto == route.protocol %}selected{% endif %}>{{ proto }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="path">Path:</label>
+        <input type="text" id="path" name="path" value="{{ route.path_prefix }}">
+    </div>
+    <div>
+        <label for="backend_path">Backend Path:</label>
+        <input type="text" id="backend_path" name="backend_path" value="{{ route.backend_path }}">
+    </div>
+    <button type="submit">Save</button>
+</form>
+
+<h2>Hosts</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Host</th>
+            <th>Weight</th>
+            <th>Max Fails</th>
+            <th>Fail Timeout</th>
+            <th>Is Backup</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for host in route.hosts %}
+        <tr>
+            <td>{{ host.host }}</td>
+            <td>{{ host.weight }}</td>
+            <td>{{ host.max_fails }}</td>
+            <td>{{ host.fail_timeout }}</td>
+            <td>{{ host.is_backup }}</td>
+            <td>
+                <form method="get" action="{{ url_for('toggle_host', route_id=route.id, host_id=host.id) }}">
+                    <button type="submit">{{ 'Deactivate' if host.active else 'Activate' }}</button>
+                </form>
+                <form method="post" action="{{ url_for('delete_host', route_id=route.id, host_id=host.id) }}" onsubmit="return confirm('Are you sure?');">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h3>Add Host</h3>
+<form method="post" action="{{ url_for('create_host', route_id=route.id) }}">
+    <label for="host">Host:</label>
+    <input type="text" id="host" name="host">
+
+    <label for="weight">Weight:</label>
+    <input type="number" id="weight" name="weight" value="1" min="1">
+
+    <label for="max_fails">Max Fails:</label>
+    <input type="number" id="max_fails" name="max_fails" value="3" min="0">
+
+    <label for="fail_timeout">Fail Timeout:</label>
+    <input type="number" id="fail_timeout" name="fail_timeout" value="30" min="0">
+
+    <label for="is_backup">Is Backup:</label>
+    <input type="checkbox" id="is_backup" name="is_backup">
+
+    <button type="submit">Add Host</button>
+</form>
+{% endblock %}

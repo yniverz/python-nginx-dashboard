@@ -1,0 +1,33 @@
+{% extends "_layout.jinja2" %}
+
+
+{% block content %}
+<form method="post" action="">
+    <label for="name">Server Name:</label>
+    <input type="text" id="name" name="name" value="{{ server.name }}" required>
+    <br>
+
+    <label for="host">Server Host:</label>
+    <input type="text" id="host" name="host" value="{{ server.host }}" required>
+    <br>
+
+    <label for="bind_port">Bind Port:</label>
+    <input type="number" id="bind_port" name="bind_port" value="{{ server.bind_port }}" required>
+    <br>
+
+    <label for="auth_token">Auth Token:</label>
+    <input type="text" id="auth_token" name="auth_token" value="{{ server.auth_token }}" required>
+    <br>
+
+    <label for="is_origin">Is Origin:</label>
+    <input type="checkbox" id="is_origin" name="is_origin" {% if server.is_origin %}checked{% endif %}>
+    <br>
+
+    <button type="submit">Save</button>
+    <a href="{{ url_for('view_proxies') }}">Cancel</a>
+</form>
+
+<form method="post" action="{{ url_for('delete_proxy_server', server_id=server.id) }}" onsubmit="return confirm('Are you sure you want to delete this server?');">
+    <button type="submit">Delete</button>
+</form>
+{% endblock %}

@@ -1,34 +1,34 @@
 import os
-from dataclasses import dataclass
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
+from pydantic import Field
+from pathlib import Path
 
-load_dotenv()
+class Settings(BaseSettings):
+    APP_NAME: str = "Multi-Domain Edge Manager"
+    DATA_DIR: str = Field(default="data")
+    SQLITE_PATH: str | None = None  # if None, will be data/app.db
+    LOCAL_IP: str = os.getenv("LOCAL_IP", "localhost")
 
-@dataclass
-class Settings:
-    APP_HOST: str = os.getenv("APP_HOST", "127.0.0.1")
-    APP_PORT: int = int(os.getenv("APP_PORT", "8080"))
-    DB_PATH: str = os.getenv("DB_PATH", "var/data/app.sqlite")
-    ADMIN_TOKEN: str = os.getenv("ADMIN_TOKEN", "changeme-admin")
+    # Nginx (optional)
+    NGINX_HTTP_CONF_PATH: str = "/etc/nginx/conf.d/edge_http.conf"
+    NGINX_STREAM_CONF_PATH: str = "/etc/nginx/stream.d/edge_stream.conf"
+    NGINX_RELOAD_CMD: str = "nginx -s reload"
+    ENABLE_NGINX: bool = False  # set True when ready
 
-    NGINX_HTTP_CONF: str = os.getenv("NGINX_HTTP_CONF", "var/nginx/reverse-proxy-http.conf")
-    NGINX_STREAM_CONF: str = os.getenv("NGINX_STREAM_CONF", "var/nginx/reverse-proxy-stream.conf")
-    NGINX_CMD: str = os.getenv("NGINX_CMD", "nginx")
-    NGINX_RELOAD_CMD: str = os.getenv("NGINX_RELOAD_CMD", "nginx -s reload")
+    # DNS provider default (Cloudflare)
+    DEFAULT_DNS_PROVIDER: str = "cloudflare"
+    CLOUDFLARE_API_TOKEN: str = os.getenv("CLOUDFLARE_API_TOKEN", "")
 
-    CF_API_BASE: str = os.getenv("CF_API_BASE", "https://api.cloudflare.com/client/v4")
-    CF_API_TOKEN: str = os.getenv("CF_API_TOKEN", "")
-    CF_ORIGIN_CA_BASE: str = os.getenv("CF_ORIGIN_CA_BASE", "https://api.cloudflare.com/client/v4")
     CF_ORIGIN_CA_KEY: str = os.getenv("CF_ORIGIN_CA_KEY", "")
-    DEFAULT_ACME_EMAIL: str = os.getenv("DEFAULT_ACME_EMAIL", "")
+    CF_REQUESTED_VALIDITY_DAYS: int = int(os.getenv("CF_REQUESTED_VALIDITY_DAYS", "5475"))  # ~15y
+    CF_KEY_TYPE: str = os.getenv("CF_KEY_TYPE", "rsa")  # "rsa" or "ecdsa"
+    CF_RSA_BITS: int = int(os.getenv("CF_RSA_BITS", "2048"))  # 2048 or 4096
 
-    VAR_DIR: str = "var"
-    CERTS_DIR: str = os.path.join(VAR_DIR, "certs")
+    def db_path(self) -> str:
+        if self.SQLITE_PATH:
+            return self.SQLITE_PATH
+        d = Path(self.DATA_DIR)
+        d.mkdir(parents=True, exist_ok=True)
+        return str(d / "app.db")
 
 settings = Settings()
-
-# ensure directories exist early
-os.makedirs(os.path.dirname(settings.DB_PATH), exist_ok=True)
-os.makedirs(os.path.dirname(settings.NGINX_HTTP_CONF), exist_ok=True)
-os.makedirs(os.path.dirname(settings.NGINX_STREAM_CONF), exist_ok=True)
-os.makedirs(settings.CERTS_DIR, exist_ok=True)
