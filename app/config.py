@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     NGINX_STREAM_CONF_PATH: str = "/etc/nginx/stream.d/edge_stream.conf"
     NGINX_SSL_PATH: str = "/etc/nginx/ssl"
     NGINX_RELOAD_CMD: str = "nginx -s reload"
-    ENABLE_NGINX: bool = False  # set True when ready
 
     # DNS provider default (Cloudflare)
     DEFAULT_DNS_PROVIDER: str = "cloudflare"
@@ -33,6 +32,10 @@ class Settings(BaseSettings):
     CF_RSA_BITS: int = 2048  # 2048 or 4096
 
     CF: cloudflare.Cloudflare | None = None
+
+
+    ENABLE_NGINX: bool = False  # set True when ready
+    ENABLE_CLOUDFLARE: bool = False  # set True when ready
 
     def model_post_init(self, __context):
         self.CF = cloudflare.Cloudflare(

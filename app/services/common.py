@@ -35,7 +35,8 @@ def background_publish():
         with DBSession() as db:
             NginxConfigGenerator(db, dry_run=not settings.ENABLE_NGINX)
 
-            CloudFlareManager(db)
+            cf = CloudFlareManager(db, dry_run=not settings.ENABLE_CLOUDFLARE)
+            cf.run()
 
         if settings.ENABLE_NGINX:
             subprocess.run(settings.NGINX_RELOAD_CMD.split(" "), check=True)

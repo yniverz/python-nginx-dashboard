@@ -1,7 +1,7 @@
 from requests import Session
 from app.persistence import repos
 from app.persistence.models import NginxRoute, NginxRouteHost, NginxRouteProtocol
-from app.services.cloudflare import CloudFlareManager, cloudflare_ip_cache
+from app.services.cloudflare import cloudflare_ip_cache
 from app.config import settings
 
 

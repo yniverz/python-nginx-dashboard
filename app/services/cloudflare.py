@@ -122,8 +122,9 @@ class SharedRecordType:
 class CloudFlareManager:
     """Manage Cloudflare DNS records."""
 
-    def __init__(self, db: requests.Session):
+    def __init__(self, db: requests.Session, dry_run: bool = False):
         self.db = db
+        self.dry_run = dry_run
         self.cf = settings.CF
         self.zones = self.cf.zones.list()
         self.entries_by_zone: dict[str, None] = {}
@@ -131,6 +132,8 @@ class CloudFlareManager:
 
         self.remote_entries: set[SharedRecordType] = set()
         self.local_entries: set[SharedRecordType] = set()
+
+    def run(self):
 
         self.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
 
@@ -191,10 +194,17 @@ class CloudFlareManager:
         record_id, zone_id = self._get_cf_record_id(record)
         if not record_id:
             return
+
+        if self.dry_run:
+            print("Dry run enabled, not deleting record.")
+            return
         self.cf.dns.records.delete(record_id, zone_id=zone_id)
 
     def _create_cloudflare_record(self, record: DnsRecord) -> None:
         print("Creating Cloudflare record:", self._get_fqdn(record))
+        if self.dry_run:
+            print("Dry run enabled, not creating record.")
+            return
         self.cf.dns.records.create(
             zone_id=self._get_zone(record.domain.name).id,
             name=self._get_fqdn(record),
