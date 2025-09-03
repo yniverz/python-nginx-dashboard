@@ -633,7 +633,7 @@ async def delete_host(request: Request, route_id: int, host_id: int, db: Session
 ###################################################
 
 @router.get("/dns", response_class=HTMLResponse)
-async def list_dns(request: Request, db: Session = Depends(get_db)):
+async def view_dns(request: Request, db: Session = Depends(get_db)):
     dns_records = repos.DnsRecordRepo(db).list_all()
     domains = repos.DomainRepo(db).list_all()
 
