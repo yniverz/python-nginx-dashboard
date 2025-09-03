@@ -12,9 +12,7 @@ PUBLIC_PREFIXES = ("/static", "/api")
 def create_app() -> FastAPI:
     app = FastAPI(title="Multi-Domain Edge Manager", root_path=settings.ROOT_PATH or "")
 
-    app.include_router(api.router)
     app.include_router(views.router)
-    app.include_router(static.router)
 
     @app.middleware("http")
     async def auth_and_flash(request: Request, call_next):
@@ -38,6 +36,8 @@ def create_app() -> FastAPI:
         return response
 
     app.add_middleware(SessionMiddleware, secret_key="test")
+    app.include_router(api.router)
+    app.include_router(static.router)
 
     
     return app
