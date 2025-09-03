@@ -571,8 +571,7 @@ async def create_host(request: Request, route_id: int, db: Session = Depends(get
             weight=int(form["weight"]) if form.get("weight") else None,
             max_fails=int(form["max_fails"]) if form.get("max_fails") else None,
             fail_timeout=int(form["fail_timeout"]) if form.get("fail_timeout") else None,
-            is_backup=form.get("is_backup", "off") == "on",
-            active=form.get("active", "off") == "on"
+            is_backup=form.get("is_backup", "off") == "on"
         )
         route.hosts.append(host)
         repos.NginxRouteRepo(db).update(route)
