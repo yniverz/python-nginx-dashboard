@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
             accept = request.headers.get("accept", "")
             if "application/json" in accept:
                 return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-            return RedirectResponse(url=views.router.url_path_for("login"), status_code=303)
+            return RedirectResponse(url=views.router.url_path_for("login_form"), status_code=303)
 
         response = await call_next(request)
         return response
