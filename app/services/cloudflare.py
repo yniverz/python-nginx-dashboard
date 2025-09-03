@@ -1,16 +1,14 @@
-from collections import defaultdict
 from dataclasses import InitVar, dataclass, field, replace
 import ipaddress
 import json
 import os
 import stat
 import time
-from typing import Any, Optional, Union
+from typing import Optional, Union
 import cloudflare
 import cloudflare.types.zones
 from cloudflare.types.zones import Zone
 from cloudflare.pagination import SyncV4PagePaginationArray
-from cloudflare.types.origin_ca_certificates import OriginCACertificate
 import requests
 from pathlib import Path
 import datetime
@@ -19,7 +17,6 @@ import ipaddress
 from app.config import settings
 from app.persistence import repos
 from app.persistence.models import DnsRecord, Domain, ManagedBy
-from old2.app.services import certs
 
 
 

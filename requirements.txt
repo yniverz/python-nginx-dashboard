@@ -1,6 +1,7 @@
 # Web framework & server
 fastapi>=0.116,<1.0
 uvicorn[standard]>=0.34
+itsdangerous
 
 # Templating & static files
 Jinja2>=3.1,<4.0
