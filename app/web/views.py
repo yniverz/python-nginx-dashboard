@@ -55,7 +55,7 @@ def authenticate(db: Session, username: str, password: str):
 def login_form(request: Request, next: str = "/"):
     # If already logged in, bounce to next (or /)
     if request.session.get("user_id"):
-        dest = next if is_safe_path(next) else "/"
+        dest = next if is_safe_path(next) else request.url_for("view_dashboard")
         return RedirectResponse(dest, status_code=303)
     safe_next = next if is_safe_path(next) else "/"
     return templates.TemplateResponse(

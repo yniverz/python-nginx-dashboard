@@ -11,6 +11,11 @@ PUBLIC_PREFIXES = ("/static", "/api")
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Multi-Domain Edge Manager", root_path=settings.ROOT_PATH or "")
+
+    app.include_router(api.router)
+    app.include_router(views.router)
+    app.include_router(static.router)
+
     @app.middleware("http")
     async def auth_and_flash(request: Request, call_next):
         # -- flash messages (your existing behavior) --
@@ -27,15 +32,12 @@ def create_app() -> FastAPI:
             accept = request.headers.get("accept", "")
             if "application/json" in accept:
                 return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-            return RedirectResponse(url=settings.ROOT_PATH + "/login", status_code=303)
+            return RedirectResponse(url=request.url_for("login_form"), status_code=303)
 
         response = await call_next(request)
         return response
 
     app.add_middleware(SessionMiddleware, secret_key="test")
-    app.include_router(api.router)
-    app.include_router(views.router)
-    app.include_router(static.router)
 
     
     return app
