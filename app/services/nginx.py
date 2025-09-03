@@ -193,7 +193,7 @@ location {path} {{
             upstream_blocks += self._get_upstream(upstream_name, route.hosts)
 
             rewrite = "" if route.path_prefix == "/" else f"rewrite ^{route.path_prefix}(.*)$ /$1 break;"
-            backend_path_header = f"proxy_set_header X-Forwarded-Prefix {backend_path};" if backend_path else ""
+            backend_path_header = f"proxy_set_header X-Forwarded-Prefix {route.path_prefix};" if route.path_prefix else ""
             proxy_blocks += f"""
     location {path} {{
         {rewrite}
