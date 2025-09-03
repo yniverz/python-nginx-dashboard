@@ -1,0 +1,19 @@
+# Web framework & server
+fastapi>=0.116,<1.0
+uvicorn[standard]>=0.34
+
+# Templating & static files
+Jinja2>=3.1,<4.0
+aiofiles>=23.0
+
+# Data validation & settings
+pydantic>=2.6,<3.0
+pydantic-settings>=2.3,<3.0
+python-multipart>=0.0.20  # for form parsing
+
+# Database
+SQLAlchemy>=2.0,<3.0
+
+# Cloudflare SDK & HTTP client
+cloudflare>=4.3,<5.0
+requests>=2.31,<3.0
