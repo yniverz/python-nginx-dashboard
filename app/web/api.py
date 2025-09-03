@@ -9,11 +9,6 @@ router = APIRouter(prefix="/api")
 
 Base.metadata.create_all(bind=engine)
 
-@router.get("/domains")
-def list_domains(db: Session = Depends(get_db)):
-    return repos.DomainRepo(db).list_all()
-
-
 @router.get("/gateway/server/{server_id}", response_class=PlainTextResponse)
 def get_gateway_server(server_id: str, db: Session = Depends(get_db), x_gateway_token: str | None = Header(None)):
     # check request headers X-Gateway-Token

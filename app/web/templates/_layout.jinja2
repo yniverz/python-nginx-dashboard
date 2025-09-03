@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8"/>
   <title>Domain Manager</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
 </head>
 <body>
   <header>
     <h1>Domain Manager</h1>
     <nav>
-      <a href="/">Dashboard</a> |
-      <a href="/domains">Domains</a> |
-      <a href="/proxies">Proxies</a> |
-      <a href="/routes">Routes</a> |
-      <a href="/dns">DNS</a> |
-      <a href="/logout">Logout</a>
+      <a href="{{ url_for('dashboard') }}">Dashboard</a> |
+      <a href="{{ url_for('list_domains') }}">Domains</a> |
+      <a href="{{ url_for('list_proxies') }}">Proxies</a> |
+      <a href="{{ url_for('list_routes') }}">Routes</a> |
+      <a href="{{ url_for('list_dns') }}">DNS</a> |
+      <a href="{{ url_for('logout') }}">Logout</a>
     </nav>
   </header>
   <main>

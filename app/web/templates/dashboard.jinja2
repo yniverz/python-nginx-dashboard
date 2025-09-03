@@ -1,5 +1,5 @@
 {% extends "_layout.jinja2" %}
 {% block content %}
 <p>Welcome to the Multi-Domain Edge Manager!</p>
-<a href="/publish" class="btn btn-primary">Publish</a>
+<a href="{{ url_for('view_publish') }}" class="btn btn-primary">Publish</a>
 {% endblock %}

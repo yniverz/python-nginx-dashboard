@@ -7,7 +7,7 @@ from app.web import views, api
 from app.config import settings
 
 PUBLIC_PATHS = {"/login"}
-PUBLIC_PREFIXES = ("/static", "/docs", "/redoc", "/openapi.json")
+PUBLIC_PREFIXES = ("/static", "/api")
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Multi-Domain Edge Manager", root_path=settings.ROOT_PATH or "")
