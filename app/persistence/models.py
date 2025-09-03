@@ -81,6 +81,7 @@ class GatewayClient(Base):
 
 class GatewayProtocol(str, enum.Enum):
     TCP = "TCP"
+    UDP = "UDP"
 
 class GatewayFlag(str, enum.Flag):
     ENCRYPTED = "transport.useencryption = true"
