@@ -1,4 +1,5 @@
 from uuid import uuid4
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
@@ -8,6 +9,9 @@ from app.config import settings
 
 PUBLIC_PATHS = {"/login"}
 PUBLIC_PREFIXES = ("/static", "/api")
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "web" / "static"
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Multi-Domain Edge Manager", root_path=settings.ROOT_PATH or "")
@@ -36,7 +40,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SessionMiddleware, secret_key="test")
     app.include_router(api.router)
     app.include_router(views.router)
-    app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     
     return app
