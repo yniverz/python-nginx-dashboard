@@ -128,6 +128,7 @@ class NginxRoute(Base):
     backend_path: Mapped[str] = mapped_column(String(255), default="")
     hosts: Mapped[list[NginxRouteHost] | None] = relationship(backref="nginx_route", cascade="all, delete-orphan", lazy="selectin")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
     __table_args__ = (UniqueConstraint("domain_id", "subdomain", "path_prefix", name="uq_http_sub_path_by_domain"),)
 
     domain: Mapped[Domain] = relationship(backref="routes", lazy="joined")

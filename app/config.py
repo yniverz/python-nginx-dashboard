@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     # Nginx (optional)
     NGINX_HTTP_CONF_PATH: str = "/etc/nginx/conf.d/edge_http.conf"
     NGINX_STREAM_CONF_PATH: str = "/etc/nginx/stream.d/edge_stream.conf"
-    NGINX_SSL_PATH: str = "/etc/nginx/ssl"
     NGINX_RELOAD_CMD: str = "nginx -s reload"
 
     # DNS provider default (Cloudflare)
@@ -27,9 +26,9 @@ class Settings(BaseSettings):
     CLOUDFLARE_API_TOKEN: str = ""
 
     CF_ORIGIN_CA_KEY: str = ""
-    CF_REQUESTED_VALIDITY_DAYS: int = 5475  # ~15y
-    CF_KEY_TYPE: str = "rsa"  # "rsa" or "ecdsa"
-    CF_RSA_BITS: int = 2048  # 2048 or 4096
+    CF_CERT_DAYS: int = 365 * 15        # 5-year Origin-CA cert
+    CF_RENEW_SOON: int = 30             # renew if <30 days to expiry
+    CF_SSL_DIR: str = "/etc/nginx/ssl"
 
     CF: cloudflare.Cloudflare | None = None
 

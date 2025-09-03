@@ -636,7 +636,7 @@ async def list_dns(request: Request, db: Session = Depends(get_db)):
     dns_records = repos.DnsRecordRepo(db).list_all()
     domains = repos.DomainRepo(db).list_all()
 
-    dns_records.sort(key=lambda r: (r.domain.name, r.name.split(".")[::-1]))
+    dns_records.sort(key=lambda r: (r.type, r.domain.name, r.name.split(".")[::-1]))
 
     return templates.TemplateResponse("dns.jinja2", {"request": request, "dns_records": dns_records, "domains": domains})
 

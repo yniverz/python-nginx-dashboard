@@ -1,5 +1,5 @@
 from typing import Sequence
-from sqlalchemy import select, delete
+from sqlalchemy import and_, select, delete
 from sqlalchemy.orm import Session
 from app.persistence.models import (
     DnsRecordArchive, Domain, NginxRoute,
@@ -61,6 +61,8 @@ class GatewayConnectionRepo:
     def __init__(self, db: Session): self.db = db
     def list_all(self) -> list[GatewayConnection]:
         return list(self.db.scalars(select(GatewayConnection).order_by(GatewayConnection.name)))
+    def list_by_client_id(self, client_id: int) -> list[GatewayConnection]:
+        return list(self.db.scalars(select(GatewayConnection).where(GatewayConnection.client_id==client_id)))
     def get(self, id: int) -> GatewayConnection | None:
         return self.db.get(GatewayConnection, id)
     def by_name(self, name: str) -> GatewayConnection | None:
@@ -113,12 +115,16 @@ class DnsRecordRepo:
         return list(self.db.scalars(select(DnsRecord).where(DnsRecord.domain_id==domain_id)))
     def get(self, id: int) -> DnsRecord | None:
         return self.db.get(DnsRecord, id)
-    def exists(self, domain_id: int, name: str, type: str) -> DnsRecord | None:
-        return self.db.scalar(select(DnsRecord).where(
-            DnsRecord.domain_id==domain_id,
-            DnsRecord.name==name,
-            DnsRecord.type==type
-        ))
+    def exists(self, domain_id: int, name: str, type: str, content: str | None = None) -> int | None:
+        conditions = [
+            DnsRecord.domain_id == domain_id,
+            DnsRecord.name == name,
+            DnsRecord.type == type,
+        ]
+        if content is not None:
+            conditions.append(DnsRecord.content == content)
+
+        return self.db.scalar(select(DnsRecord.id).where(and_(*conditions)))
     def create(self, rec: DnsRecord) -> DnsRecord:
         archive = self.db.scalar(select(DnsRecordArchive).where(
             DnsRecordArchive.name==rec.name,

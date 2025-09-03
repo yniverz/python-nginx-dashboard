@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.web import views#, api
+from app.web import views, api
 
 PUBLIC_PATHS = {"/login"}
 PUBLIC_PREFIXES = ("/static", "/docs", "/redoc", "/openapi.json")
@@ -33,7 +33,7 @@ def create_app() -> FastAPI:
         return response
 
     app.add_middleware(SessionMiddleware, secret_key="test")
-    # app.include_router(api.router)
+    app.include_router(api.router)
     app.include_router(views.router)
     app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 

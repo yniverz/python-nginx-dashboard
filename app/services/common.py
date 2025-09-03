@@ -9,13 +9,14 @@ from app.config import settings
 from app.persistence import repos
 from app.persistence.db import DBSession
 from app.persistence.models import DnsRecord, GatewayConnection, GatewayProtocol, ManagedBy
-from app.services.cloudflare import CloudFlareManager
+from app.services.cloudflare import CloudFlareManager, CloudFlareOriginCAManager
 from app.services.nginx import NginxConfigGenerator
 
 
 
 JOB_RUNNING = False
 JOB_RESULT = None
+UNSYNCED_CHANGES = False
 
 def get_job_result():
     global JOB_RESULT
@@ -25,20 +26,22 @@ def get_job_result():
     return r
 
 def background_publish():
-    global JOB_RUNNING, JOB_RESULT
+    global JOB_RUNNING, JOB_RESULT, UNSYNCED_CHANGES
 
     if JOB_RUNNING:
         return
 
     JOB_RUNNING = True
+    UNSYNCED_CHANGES = False
     try:
         with DBSession() as db:
             NginxConfigGenerator(db, dry_run=not settings.ENABLE_NGINX)
 
-            cf = CloudFlareManager(db, dry_run=not settings.ENABLE_CLOUDFLARE)
-            remote_entries = cf.run()
+            cf_dns = CloudFlareManager(db, dry_run=not settings.ENABLE_CLOUDFLARE)
+            cache = cf_dns.sync()
 
-            # TODO Implement Cloudflare CA Creation and management
+            cf_ca = CloudFlareOriginCAManager(db, cache, dry_run=not settings.ENABLE_CLOUDFLARE)
+            cf_ca.sync()
 
         if settings.ENABLE_NGINX:
             subprocess.run(settings.NGINX_RELOAD_CMD.split(" "), check=True)
@@ -54,10 +57,15 @@ def background_publish():
 
 
 def propagate_changes(db: Session):
+    global UNSYNCED_CHANGES
+    UNSYNCED_CHANGES = True
+    print(UNSYNCED_CHANGES)
+
     # Propagator:
     # For every proxy client
     # - Is origin?
     #     - Create proxy connection to 80 and 443
+
 
     origin_ips = []
 
@@ -99,16 +107,17 @@ def propagate_changes(db: Session):
 
             for domain in repos.DomainRepo(db).list_all():
                 if domain.use_for_direct_prefix:
-                    exists = repos.DnsRecordRepo(db).exists(
+                    exists_id = repos.DnsRecordRepo(db).exists(
                         domain_id=domain.id,
                         name=f"{client.server.name}.direct",
                         type="A",
                     )
-                    if exists:
-                        exists.content = origin_ip
-                        exists.proxied = False
-                        exists.managed_by = ManagedBy.SYSTEM
-                        repos.DnsRecordRepo(db).update(exists)
+                    if exists_id:
+                        rec = repos.DnsRecordRepo(db).get(exists_id)
+                        rec.content = origin_ip
+                        rec.proxied = False
+                        rec.managed_by = ManagedBy.SYSTEM
+                        repos.DnsRecordRepo(db).update(rec)
                         continue
 
                     repos.DnsRecordRepo(db).create(
@@ -128,10 +137,13 @@ def propagate_changes(db: Session):
     # - Is multilevel subdomain?
     #     - Ensure dns records for each origin ip Managed by SYSTEM, proxy on
 
+    subdomains = set()
     for route in repos.NginxRouteRepo(db).list_all():
         # multilevel if any subdomain exists with more subdomains than this one, so if this one is "a" then it is multilevel if another one with "b.a" exists
         # or if it is "b.a" and one exists with "c.b.a"
-        is_multilevel = False
+        subdomains.add((route.subdomain, route.domain.name))
+
+        is_multilevel = route.subdomain.count(".") > 0
         for other_route in repos.NginxRouteRepo(db).list_by_domain(route.domain_id):
             if other_route.subdomain != route.subdomain and other_route.subdomain.endswith(f".{route.subdomain}") and route.domain.use_for_direct_prefix:
                 is_multilevel = True
@@ -139,6 +151,18 @@ def propagate_changes(db: Session):
 
         if is_multilevel:
             for ip in origin_ips:
+                exists_id = repos.DnsRecordRepo(db).exists(
+                    domain_id=route.domain.id,
+                    name=f"*.{route.subdomain}",
+                    type="A",
+                    content=ip
+                )
+                if exists_id:
+                    rec = repos.DnsRecordRepo(db).get(exists_id)
+                    rec.proxied = True
+                    rec.managed_by = ManagedBy.SYSTEM
+                    repos.DnsRecordRepo(db).update(rec)
+                    continue
                 repos.DnsRecordRepo(db).create(
                     DnsRecord(
                         domain_id=route.domain.id,
@@ -152,17 +176,45 @@ def propagate_changes(db: Session):
 
     for domain in repos.DomainRepo(db).list_all():
         for ip in origin_ips:
-            repos.DnsRecordRepo(db).create(
-                DnsRecord(
+            # if any subdomain == @ for this domain exists
+            if ("@", domain.name) in subdomains:
+                exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=domain.id,
                     name=f"@",
                     type="A",
-                    content=ip,
-                    proxied=True,
-                    managed_by=ManagedBy.SYSTEM,
+                    content=ip
                 )
-            )
-            if domain.use_for_direct_prefix:
+                if exists_id:
+                    rec = repos.DnsRecordRepo(db).get(exists_id)
+                    rec.proxied = True
+                    rec.managed_by = ManagedBy.SYSTEM
+                    repos.DnsRecordRepo(db).update(rec)
+                else:
+                    repos.DnsRecordRepo(db).create(
+                        DnsRecord(
+                            domain_id=domain.id,
+                            name=f"@",
+                            type="A",
+                            content=ip,
+                            proxied=True,
+                            managed_by=ManagedBy.SYSTEM,
+                        )
+                    )
+
+            if any(s for s in subdomains if s[0] != "@"):
+                exists_id = repos.DnsRecordRepo(db).exists(
+                    domain_id=domain.id,
+                    name=f"*",
+                    type="A",
+                    content=ip
+                )
+                if exists_id:
+                    rec = repos.DnsRecordRepo(db).get(exists_id)
+                    rec.proxied = True
+                    rec.managed_by = ManagedBy.SYSTEM
+                    repos.DnsRecordRepo(db).update(rec)
+                    continue
+                
                 repos.DnsRecordRepo(db).create(
                     DnsRecord(
                         domain_id=domain.id,

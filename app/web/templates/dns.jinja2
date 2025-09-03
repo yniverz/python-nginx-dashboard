@@ -3,6 +3,12 @@
 {% block content %}
 <h1>DNS</h1>
 
+    {{ unsynced_changes }}
+{% if unsynced_changes %}
+<div class="alert alert-warning">
+    You have unsynced changes.
+</div>
+{% endif %}
 
 <form method="POST" action="{{ url_for('create_dns_record') }}">
     <input type="text" name="name" placeholder="Name" required>

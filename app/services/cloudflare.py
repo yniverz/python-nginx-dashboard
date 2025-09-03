@@ -1,13 +1,16 @@
 from collections import defaultdict
-from dataclasses import dataclass, field, replace
+from dataclasses import InitVar, dataclass, field, replace
 import ipaddress
 import json
 import os
 import stat
 import time
-from typing import Optional, Union
+from typing import Any, Optional, Union
 import cloudflare
 import cloudflare.types.zones
+from cloudflare.types.zones import Zone
+from cloudflare.pagination import SyncV4PagePaginationArray
+from cloudflare.types.origin_ca_certificates import OriginCACertificate
 import requests
 from pathlib import Path
 import datetime
@@ -15,7 +18,8 @@ import subprocess
 import ipaddress
 from app.config import settings
 from app.persistence import repos
-from app.persistence.models import DnsRecord, ManagedBy
+from app.persistence.models import DnsRecord, Domain, ManagedBy
+from old2.app.services import certs
 
 
 
@@ -109,15 +113,32 @@ cloudflare_ip_cache = CloudflareIPCache()
 cloudflare_ip_cache.get()
 
 
-
 @dataclass(frozen=True)
 class SharedRecordType:
     domain: str
     name: str
     type: str
     content: str
+    proxied: bool
     managed_by: str = field(compare=False, hash=False)
     record_id: Union[int, str] = field(compare=False, hash=False, default=None)
+
+@dataclass
+class CloudFlareDnsCache:
+    db: InitVar[requests.Session]
+    cf: InitVar[cloudflare.Cloudflare]
+
+    zones: SyncV4PagePaginationArray[Zone] = field(default_factory=list)
+    entries_by_zone: dict[str, SyncV4PagePaginationArray] = field(default_factory=dict)
+    domains: list[Domain] = field(default_factory=list)
+
+    remote_entries: set[SharedRecordType] = field(default_factory=set)
+    local_entries: set[SharedRecordType] = field(default_factory=set)
+
+    def __post_init__(self, db: requests.Session, cf: cloudflare.Cloudflare):
+        self.zones = cf.zones.list()
+        self.domains = repos.DomainRepo(db).list_all()
+
 
 class CloudFlareManager:
     """Manage Cloudflare DNS records."""
@@ -126,39 +147,34 @@ class CloudFlareManager:
         self.db = db
         self.dry_run = dry_run
         self.cf = settings.CF
-        self.zones = self.cf.zones.list()
-        self.entries_by_zone: dict[str, None] = {}
-        self.domains = repos.DomainRepo(db).list_all()
+        self.cf_cache = CloudFlareDnsCache(self.db, self.cf)
 
-        self.remote_entries: set[SharedRecordType] = set()
-        self.local_entries: set[SharedRecordType] = set()
-
-    def run(self) -> list[SharedRecordType]:
+    def sync(self) -> CloudFlareDnsCache:
         """
         Run the CloudFlare manager.
 
         returns list of all records on cloudflare now
         """
 
-        self.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
+        self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
 
         repos.DnsRecordRepo(self.db).delete_all_managed_by(ManagedBy.IMPORTED)
-        for domain in self.domains:
+        for domain in self.cf_cache.domains:
             zone = self._get_zone(domain.name)
             if zone:
                 entries = self.cf.dns.records.list(zone_id=zone.id)
-                self.entries_by_zone[zone.id] = entries
+                self.cf_cache.entries_by_zone[zone.id] = entries
                 for entry in entries:
                     shared_rec = self._get_shared_record_from_cf(domain.name, entry)
 
-                    existing_local = next((e for e in self.local_entries if e == shared_rec), None)
+                    existing_local = next((e for e in self.cf_cache.local_entries if e == shared_rec), None)
                     if existing_local:
                         shared_rec = replace(shared_rec, managed_by=existing_local.managed_by)
                     else:
                         repos.DnsRecordRepo(self.db).create(
                             DnsRecord(
                                 domain_id=domain.id,
-                                name=entry.name,
+                                name=entry.name[: -len(domain.name)-1] if entry.name.endswith(f".{domain.name}") else "@",
                                 type=entry.type,
                                 content=entry.content,
                                 ttl=entry.ttl,
@@ -168,18 +184,18 @@ class CloudFlareManager:
                                 meta=entry.meta,
                             )
                         )
-                    self.remote_entries.add(shared_rec)
+                    self.cf_cache.remote_entries.add(shared_rec)
 
         # go through archived records and see if they still exist, if yes, delete first.
         for entry in repos.DnsRecordRepo(self.db).list_archived():
-            print(entry.name)
+            print("remove ", entry.name)
             shared_rec = self._get_shared_record_from_db(entry)
-            if shared_rec in self.remote_entries and entry.managed_by != ManagedBy.IMPORTED:
+            if shared_rec in self.cf_cache.remote_entries and entry.managed_by != ManagedBy.IMPORTED:
                 self._delete_cloudflare_record(entry)
-                self.remote_entries.discard(shared_rec)
+                self.cf_cache.remote_entries.discard(shared_rec)
             repos.DnsRecordRepo(self.db).delete_archived(entry.id)
 
-        missing_remote = self.local_entries - self.remote_entries
+        missing_remote = self.cf_cache.local_entries - self.cf_cache.remote_entries
         for entry in missing_remote:
             db_record = self._get_db_record_from_shared(entry)
             if not db_record:
@@ -187,6 +203,7 @@ class CloudFlareManager:
                 continue
 
             self._create_cloudflare_record(db_record)
+            self.cf_cache.remote_entries.add(entry)
 
         # for e in self.local_entries:
         #     print(e.name, e.type, e.content, e.managed_by)
@@ -194,7 +211,7 @@ class CloudFlareManager:
         # for e in self.remote_entries:
         #     print(e.name, e.type, e.content, e.managed_by)
 
-        return list(self.remote_entries)
+        return self.cf_cache
 
     def _delete_cloudflare_record(self, record: DnsRecord) -> None:
         print("Deleting Cloudflare record:", self._get_fqdn(record))
@@ -236,6 +253,7 @@ class CloudFlareManager:
             name=name,
             type=record.type.name,
             content=record.content,
+            proxied=record.proxied if hasattr(record, 'proxied') else False,
             managed_by=record.managed_by,
         )
 
@@ -248,12 +266,13 @@ class CloudFlareManager:
             name=record.name,
             type=record.type,
             content=record.content,
+            proxied=record.proxied,
             managed_by=ManagedBy.IMPORTED,
             record_id=record.id,
         )
 
     def _get_zone(self, domain: str) -> cloudflare.types.zones.Zone | None:
-        for zone in self.zones:
+        for zone in self.cf_cache.zones:
             if zone.name == domain:
                 return zone
         return None
@@ -262,7 +281,7 @@ class CloudFlareManager:
         zone = self._get_zone(record.domain.name)
         if not zone:
             return None, None
-        for entry in self.entries_by_zone.get(zone.id, []):
+        for entry in self.cf_cache.entries_by_zone.get(zone.id, []):
             if entry.name == self._get_fqdn(record) and entry.type == record.type and entry.content == record.content:
                 return entry.id, zone.id
         return None, None
@@ -270,4 +289,259 @@ class CloudFlareManager:
 
 
 
-# TODO Implement Cloudflare CA Management class
+
+@dataclass
+class CACertificateIdentifier:
+    id: str
+    expires: datetime.datetime
+    certificate: str
+    private_key: str
+
+class CloudFlareOriginCAManager:
+    """
+    Keeps one Origin-CA certificate per wildcard label:
+
+        ''          → *.example.com  +  example.com
+        'static'    → *.static.example.com  +  static.example.com
+        've.orgn'   → *.ve.orgn.example.com + ve.orgn.example.com
+    """
+
+    def __init__(self, db: requests.Session, cf_cache: CloudFlareDnsCache, dry_run: bool = False):
+        self.db = db
+        self.dry_run = dry_run
+        self.cf = settings.CF
+        self.cf_cache = cf_cache
+
+
+    def sync(self):
+        existing = self._index_existing()
+        wanted = self._get_labels()
+        for (zone_id, domain), certs in existing.items():
+            if domain not in wanted:
+                continue
+
+            self._sync_zone(zone_id, domain, certs, wanted[domain])
+
+    def _sync_zone(self, zone_id: str, domain: str, existing_certs: dict[str, CACertificateIdentifier], wanted_hosts: set[tuple[str, str]]):
+        print("- ", domain)
+
+        for hosts in wanted_hosts:
+            info = existing_certs.get(hosts)
+            if info and not self._expiring(info.expires) and self._is_on_disk(hosts[0], info):
+                print(hosts, info.expires, "still valid.")
+                continue
+
+            self._create_or_renew_cert(hosts, info)
+
+        existing = set(existing_certs.keys())
+
+        for hosts in existing - wanted_hosts:
+            if self.dry_run:
+                print(f"[Origin-CA] would revoke {existing_certs[hosts].id} {hosts} for {domain} (dry run)")
+                continue
+
+            self.cf.origin_ca_certificates.delete(existing_certs[hosts].id)
+            print(f"[Origin-CA] revoked {existing_certs[hosts].id} {hosts} for {domain}")
+
+    def _create_or_renew_cert(self, hosts: tuple[str, str], info: CACertificateIdentifier):
+        if self.dry_run:
+            print(f"[Origin-CA] would create/renew cert for {hosts} (dry run)")
+            return
+
+        label = hosts[0]
+        key_p, csr_p = self._ensure_key_and_csr(label)
+        cert = self._upload_csr(label, csr_p.read_text())
+        self._write_to_disk(label, cert)
+
+    def _get_labels(self) -> dict[str, set[tuple[str, str]]]:
+        relevant_entries = [r for r in self.cf_cache.remote_entries if r.managed_by == ManagedBy.SYSTEM and r.type in ("A", "AAAA") and r.proxied]
+        fqdn_labels: dict[str, set[tuple[str, str]]] = {}
+
+        for entry in relevant_entries:
+            label = None
+            if entry.name.startswith("*"):
+                label = entry.name[2:]
+            else:
+                label = entry.name
+            fqdn_labels[entry.domain] = fqdn_labels.get(entry.domain, set())
+            fqdn_labels[entry.domain].add((label, f"*.{label}"))
+
+        return fqdn_labels
+
+    def old_sync(self, labels: list[str]) -> dict[str, tuple[str, str]]:
+        """
+        Make sure every *label* in `labels` has a fresh Origin-CA cert and
+        revoke anything else. Returns `{label: (crt_path, key_path)}`.
+        """
+        existing = self._index_existing()        # {label: {...}}
+        wanted   = set(labels)
+        if "" not in wanted: # ensure root wildcard
+            wanted.add("")
+
+        paths: dict[str, tuple[str, str]] = {}
+
+        # create / renew ------------------------------------------------
+        for label in wanted:
+            info = existing.get(label)
+            if info and not self._expiring(info["expires"]):
+                paths[label] = self._write_to_disk(label, info)
+                continue
+
+            key_p, csr_p = self._ensure_key_and_csr(label)
+            cert = self._upload_csr(label, csr_p.read_text())
+            paths[label] = self._write_to_disk(label, cert, is_new=True)
+
+        # revoke obsolete ---------------------------------------------
+        for label in existing.keys() - wanted:
+            self.cf.origin_ca_certificates.delete(existing[label]["id"])
+            print(f"[Origin-CA] revoked {existing[label]['id']} "
+                  f"({label or '*'}.{self.domain})")
+
+        return paths
+
+
+    def _index_existing(self):
+        zone_ids = {(zone.id, zone.name) for zone in self.cf_cache.zones}
+        existing: dict[str, dict[str, CACertificateIdentifier]] = {}
+        for zone_id in zone_ids:
+            certs = self.cf.origin_ca_certificates.list(zone_id=zone_id)
+            existing[zone_id] = {tuple(sorted(c.hostnames, reverse=True)): CACertificateIdentifier(
+                id=c.id,
+                expires=datetime.datetime.strptime(c.expires_on.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S %z"),
+                certificate=c.certificate,
+                private_key="",  # only present on create
+            ) for c in certs}
+        return existing
+
+    def old_index_existing(self) -> dict[str, dict]:
+        """
+        Gather non-revoked certs belonging to *this* domain.
+        """
+        out: dict[str, dict] = {}
+        page = 1
+        while True:
+            resp = self.cf.origin_ca_certificates.list(
+                zone_id=self.zone_id,
+                page=page,
+                per_page=100
+            )
+
+            if not resp.result or len(resp.result) == 0:
+                break
+
+            for c in resp.result:
+                
+                hosts = sorted(c.hostnames)
+                label = (
+                    ""
+                    if hosts == [self.domain, f"*.{self.domain}"]
+                    else hosts[0][2 : -(len(self.domain) + 1)]
+                )
+                out[label] = {
+                    "id":          c.id,
+                    "expires":     datetime.datetime.strptime(c.expires_on.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S %z"),
+                    "certificate": c.certificate,
+                    "private_key": "",  # only present on create
+                }
+
+            # if page >= resp.res["result_info"]["total_pages"]:
+            #     break
+            page += 1
+        return out
+
+    # ------------------------------------------------------------
+    def _ensure_key_and_csr(self, label: str) -> tuple[Path, Path]:
+        """
+        Generate (or reuse) privkey.pem + req.csr for *label*.
+        """
+        tdir    = (Path(settings.CF_SSL_DIR) / label).resolve()
+        key_p   = tdir / "privkey.pem"
+        csr_p   = tdir / "req.csr"
+
+        if key_p.exists() and csr_p.exists():
+            return key_p, csr_p
+
+        tdir.mkdir(parents=True, exist_ok=True)
+
+        cn   = f"*.{label}"
+        sans = f"DNS:{label},DNS:*.{label}"
+
+        subprocess.run(
+            [
+                "openssl", "req", "-new", "-nodes",
+                "-newkey", "rsa:2048",
+                "-subj", f"/CN={cn}",
+                "-addext", f"subjectAltName={sans}",
+                "-keyout", str(key_p),
+                "-out", str(csr_p),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        os.chmod(key_p, 0o600)
+        os.chmod(csr_p, 0o600)
+        return key_p, csr_p
+
+    # ------------------------------------------------------------
+    def _upload_csr(self, label: str, csr_pem: str) -> CACertificateIdentifier:
+        """
+        Send CSR to Cloudflare and return the resulting certificate dict.
+        """
+        hostnames = ([f"{label}", f"*.{label}"])
+        cert = self.cf.origin_ca_certificates.create(
+            hostnames=hostnames,
+            request_type="origin-rsa",
+            requested_validity=settings.CF_CERT_DAYS,
+            csr=csr_pem
+        )
+
+        identifier = CACertificateIdentifier(
+            id=cert.id,
+            expires=datetime.datetime.strptime(cert.expires_on.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S %z"),
+            certificate=cert.certificate,
+            private_key=cert.private_key
+        )
+
+        print(f"[Origin-CA] issued cert id={cert.id} "
+              f"for {', '.join(hostnames)}")
+        return identifier
+
+    # ------------------------------------------------------------
+    def _is_on_disk(self, label: str, entry: CACertificateIdentifier) -> bool:
+        """
+        Check if the certificate and key files exist on disk.
+        """
+        tdir  = (Path(settings.CF_SSL_DIR) / label).resolve()
+        crt_p = tdir / "fullchain.pem"
+        key_p = tdir / "privkey.pem"
+
+        return crt_p.exists() and key_p.exists()
+
+    def _write_to_disk(
+        self,
+        label: str,
+        entry: CACertificateIdentifier,
+    ) -> tuple[str, str]:
+        """
+        Store PEMs under /etc/nginx/ssl and return (crt_path, key_path).
+        """
+        tdir  = (Path(settings.CF_SSL_DIR) / label).resolve()
+        crt_p = tdir / "fullchain.pem"
+        key_p = tdir / "privkey.pem"
+
+        tdir.mkdir(parents=True, exist_ok=True)
+
+        crt_p.write_text(entry.certificate)
+        os.chmod(crt_p, 0o600)
+        
+        key_p.write_text(entry.private_key)
+        os.chmod(key_p, 0o600)
+
+        return str(crt_p), str(key_p)
+
+    # ------------------------------------------------------------
+    @staticmethod
+    def _expiring(expires: datetime.datetime) -> bool:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        return expires - now < datetime.timedelta(days=settings.CF_RENEW_SOON)
