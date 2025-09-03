@@ -122,11 +122,11 @@ def view_publish(request: Request, db: Session = Depends(get_db)):
         propagate_changes(db)
         threading.Thread(target=background_publish).start()
 
-    return HTMLResponse("""
+    return HTMLResponse(f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <meta http-equiv="refresh" content="2;url=/publish">
+    <meta http-equiv="refresh" content="2;url={request.url_for('view_publish')}">
     <title>Publishing...</title>
 </head>
 <body>
