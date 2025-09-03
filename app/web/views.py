@@ -2,6 +2,7 @@ from datetime import datetime
 import threading
 import traceback
 from typing import Union
+from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
@@ -16,7 +17,9 @@ from app.persistence.models import (
 )
 from app.services.common import JOB_RUNNING, get_job_result, propagate_changes, background_publish
 
-templates = Jinja2Templates(directory="app/web/templates")
+ROOT = (Path(__file__).resolve().parent / "templates").resolve()
+
+templates = Jinja2Templates(directory=ROOT)
 router = APIRouter()
 
 

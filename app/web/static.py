@@ -13,7 +13,7 @@ mimetypes.add_type("application/json", ".map")
 router = APIRouter()
 
 # Point this to your real static directory (absolute path!)
-STATIC_ROOT = (Path(__file__).resolve().parent / "web" / "static").resolve()
+STATIC_ROOT = (Path(__file__).resolve().parent / "static").resolve()
 
 @router.get("/static/{path:path}", include_in_schema=False)
 def static_files(request: Request, path: str):
