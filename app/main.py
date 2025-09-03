@@ -22,7 +22,7 @@ def create_app() -> FastAPI:
         request.state.flash_messages = flashes
 
         # -- auth gate --
-        path = request.url.path
+        path = request.scope.get("path", "")
         is_public = (path in PUBLIC_PATHS) or path.startswith(PUBLIC_PREFIXES)
         logged_in = bool(request.session.get("user_id"))  # set this at login
 
