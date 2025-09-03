@@ -133,7 +133,12 @@ class CloudFlareManager:
         self.remote_entries: set[SharedRecordType] = set()
         self.local_entries: set[SharedRecordType] = set()
 
-    def run(self):
+    def run(self) -> list[SharedRecordType]:
+        """
+        Run the CloudFlare manager.
+
+        returns list of all records on cloudflare now
+        """
 
         self.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
 
@@ -188,6 +193,8 @@ class CloudFlareManager:
         # print("---")
         # for e in self.remote_entries:
         #     print(e.name, e.type, e.content, e.managed_by)
+
+        return list(self.remote_entries)
 
     def _delete_cloudflare_record(self, record: DnsRecord) -> None:
         print("Deleting Cloudflare record:", self._get_fqdn(record))
@@ -260,3 +267,7 @@ class CloudFlareManager:
                 return entry.id, zone.id
         return None, None
 
+
+
+
+# TODO Implement Cloudflare CA Management class

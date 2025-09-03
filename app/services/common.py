@@ -36,7 +36,9 @@ def background_publish():
             NginxConfigGenerator(db, dry_run=not settings.ENABLE_NGINX)
 
             cf = CloudFlareManager(db, dry_run=not settings.ENABLE_CLOUDFLARE)
-            cf.run()
+            remote_entries = cf.run()
+
+            # TODO Implement Cloudflare CA Creation and management
 
         if settings.ENABLE_NGINX:
             subprocess.run(settings.NGINX_RELOAD_CMD.split(" "), check=True)
