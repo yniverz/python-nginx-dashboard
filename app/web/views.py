@@ -448,7 +448,7 @@ async def delete_proxy_connection(request: Request, connection_id: int, db: Sess
 ###################################################
 
 @router.get("/routes", response_class=HTMLResponse)
-def list_routes(request: Request, db: Session = Depends(get_db)):
+def view_routes(request: Request, db: Session = Depends(get_db)):
     routes = repos.NginxRouteRepo(db).list_all()
     domains = repos.DomainRepo(db).list_all()
     protocols = [e.value for e in NginxRouteProtocol]
