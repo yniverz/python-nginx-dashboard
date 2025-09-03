@@ -4,7 +4,7 @@ import traceback
 from typing import Union
 from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Depends, Form
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.config import settings
@@ -25,9 +25,9 @@ Base.metadata.create_all(bind=engine)
 
 
 
-@router.get("/static/{path:path}", response_class=HTMLResponse)
+@router.get("/static/{path:path}", response_class=FileResponse)
 def static_files(request: Request, path: str):
-    return templates.TemplateResponse(f"static/{path}", {"request": request})
+    return FileResponse(f"app/web/static/{path}")
 
 
 
