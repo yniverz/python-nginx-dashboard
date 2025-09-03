@@ -295,13 +295,6 @@ class CACertificateIdentifier:
     private_key: str
 
 class CloudFlareOriginCAManager:
-    """
-    Keeps one Origin-CA certificate per wildcard label:
-
-        ''          → *.example.com  +  example.com
-        'static'    → *.static.example.com  +  static.example.com
-        've.orgn'   → *.ve.orgn.example.com + ve.orgn.example.com
-    """
 
     def __init__(self, db: requests.Session, cf_cache: CloudFlareDnsCache, dry_run: bool = False):
         self.db = db

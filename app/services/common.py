@@ -153,10 +153,11 @@ def propagate_changes(db: Session):
                 break
 
         if is_multilevel:
+            without_last = ".".join(route.subdomain.split(".")[1:])
             for ip in origin_ips:
                 exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=route.domain.id,
-                    name=f"*.{route.subdomain}",
+                    name=f"*.{without_last}",
                     type="A",
                     content=ip
                 )
@@ -169,7 +170,7 @@ def propagate_changes(db: Session):
                 repos.DnsRecordRepo(db).create(
                     DnsRecord(
                         domain_id=route.domain.id,
-                        name=f"*.{route.subdomain}",
+                        name=f"*.{without_last}",
                         type="A",
                         content=ip,
                         proxied=True,
