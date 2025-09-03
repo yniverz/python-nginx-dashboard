@@ -20,6 +20,7 @@ def static_files(request: Request, path: str):
     # Normalize & prevent path traversal
     full_path = (STATIC_ROOT / path).resolve()
     if not full_path.is_file() or not str(full_path).startswith(str(STATIC_ROOT)):
+        print(f"Blocked access to: {full_path}")
         raise HTTPException(status_code=404)
 
     # Guess content type
