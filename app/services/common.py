@@ -21,6 +21,9 @@ UNSYNCED_CHANGES = False
 def get_job_result():
     global JOB_RESULT
 
+    if JOB_RUNNING:
+        return
+
     r = JOB_RESULT
     JOB_RESULT = None
     return r

@@ -111,22 +111,27 @@ def view_dashboard(request: Request, db: Session = Depends(get_db)):
 
 
 
-@router.get("/publish", response_class=Union[HTMLResponse, RedirectResponse])
+@router.get("/publish", response_class=RedirectResponse)
 def view_publish(request: Request, db: Session = Depends(get_db)):
+    if not JOB_RUNNING:
+        propagate_changes(db)
+        threading.Thread(target=background_publish).start()
+
+    return RedirectResponse(url=request.url_for("view_publish_status"), status_code=303)
+
+
+@router.get("/publish/wait", response_class=Union[HTMLResponse, RedirectResponse])
+def view_publish_status(request: Request):
     job_result = get_job_result()
     if job_result:
         flash(request, f"{job_result}", "info")
         return RedirectResponse(request.url_for("view_dashboard"), status_code=303)
 
-    if not JOB_RUNNING:
-        propagate_changes(db)
-        threading.Thread(target=background_publish).start()
-
     return HTMLResponse(f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <meta http-equiv="refresh" content="5;url={request.url_for('view_publish')}">
+    <meta http-equiv="refresh" content="2;url={request.url_for('view_publish_status')}">
     <title>Publishing...</title>
 </head>
 <body>
