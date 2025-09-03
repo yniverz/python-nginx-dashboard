@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     CF: cloudflare.Cloudflare | None = None
 
 
+    DEBUG_MODE: bool = True
     ENABLE_NGINX: bool = False  # set True when ready
     ENABLE_CLOUDFLARE: bool = False  # set True when ready
 
