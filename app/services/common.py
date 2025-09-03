@@ -62,7 +62,6 @@ def background_publish():
 def propagate_changes(db: Session):
     global UNSYNCED_CHANGES
     UNSYNCED_CHANGES = True
-    print(UNSYNCED_CHANGES)
 
     # Propagator:
     # For every proxy client
