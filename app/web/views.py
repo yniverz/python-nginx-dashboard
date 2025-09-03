@@ -202,7 +202,9 @@ async def edit_domain(request: Request, domain_id: int, action: str, db: Session
 @router.get("/proxies", response_class=HTMLResponse)
 def view_proxies(request: Request, db: Session = Depends(get_db)):
     servers = repos.GatewayServerRepo(db).list_all()
+    servers.sort(key=lambda r: r.name)
     clients = repos.GatewayClientRepo(db).list_all()
+    clients.sort(key=lambda r: (r.server.name, r.name))
     connections = repos.GatewayConnectionRepo(db).list_all()
     protocols = [e.value for e in GatewayProtocol]
     return templates.TemplateResponse("proxies.jinja2", {"request": request, "servers": servers, "clients": clients, "connections": connections, "protocols": protocols, "ManagedBy": ManagedBy, "now": datetime.now()})
