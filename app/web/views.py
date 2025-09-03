@@ -25,13 +25,9 @@ Base.metadata.create_all(bind=engine)
 
 
 
-@router.get("/static/styles.css", response_class=HTMLResponse)
-def static_styles(request: Request):
-    return templates.TemplateResponse("static/styles.css", {"request": request})
-
-
-
-
+@router.get("/static/{path:path}", response_class=HTMLResponse)
+def static_files(request: Request, path: str):
+    return templates.TemplateResponse(f"static/{path}", {"request": request})
 
 
 
