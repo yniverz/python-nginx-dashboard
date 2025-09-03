@@ -164,7 +164,7 @@ async def create_domain(request: Request, db: Session = Depends(get_db)):
         traceback.print_exc()
         flash(request, f"Error creating domain: {str(e)}", category="error")
 
-    return RedirectResponse(url="/domains", status_code=303)
+    return RedirectResponse(url=request.url_for("view_domains"), status_code=303)
 
 
 @router.get("/domains/edit/{domain_id}/{action}", response_class=RedirectResponse)
@@ -195,7 +195,7 @@ async def edit_domain(request: Request, domain_id: int, action: str, db: Session
         traceback.print_exc()
         flash(request, f"Error updating domain: {str(e)}", category="error")
 
-    return RedirectResponse(url="/domains", status_code=303)
+    return RedirectResponse(url=request.url_for("view_domains"), status_code=303)
 
 
 
@@ -254,7 +254,7 @@ async def create_proxy(request: Request, proxy_type: str, db: Session = Depends(
         traceback.print_exc()
         flash(request, f"Error creating proxy: {str(e)}", category="error")
 
-    return RedirectResponse(url="/proxies", status_code=303)
+    return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
 
 ################################
@@ -266,7 +266,7 @@ def edit_proxy_server(request: Request, server_id: int, db: Session = Depends(ge
     server = repos.GatewayServerRepo(db).get(server_id)
     if not server:
         flash(request, "Server not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     return templates.TemplateResponse("proxies.edit.server.jinja2", {"request": request, "server": server})
 
@@ -276,7 +276,7 @@ async def update_proxy_server(request: Request, server_id: int, db: Session = De
     server = repos.GatewayServerRepo(db).get(server_id)
     if not server:
         flash(request, "Server not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     try:
         server.name = form["name"]
@@ -291,18 +291,18 @@ async def update_proxy_server(request: Request, server_id: int, db: Session = De
         traceback.print_exc()
         flash(request, f"Error updating server: {str(e)}", category="error")
 
-    return RedirectResponse(url="/proxies", status_code=303)
+    return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
 @router.post("/proxies/delete/server/{server_id}", response_class=RedirectResponse)
 async def delete_proxy_server(request: Request, server_id: int, db: Session = Depends(get_db)):
     server = repos.GatewayServerRepo(db).get(server_id)
     if not server:
         flash(request, "Server not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     if any(client.server_id == server.id for client in repos.GatewayClientRepo(db).list_all()):
         flash(request, "Server has active clients and cannot be deleted", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     try:
         repos.GatewayServerRepo(db).delete(server.id)
@@ -313,7 +313,7 @@ async def delete_proxy_server(request: Request, server_id: int, db: Session = De
         traceback.print_exc()
         flash(request, f"Error deleting server: {str(e)}", category="error")
 
-    return RedirectResponse(url="/proxies", status_code=303)
+    return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
 
 
@@ -326,7 +326,7 @@ def edit_proxy_client(request: Request, client_id: int, db: Session = Depends(ge
     client = repos.GatewayClientRepo(db).get(client_id)
     if not client:
         flash(request, "Client not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
     
     servers = repos.GatewayServerRepo(db).list_all()
 
@@ -338,7 +338,7 @@ async def update_proxy_client(request: Request, client_id: int, db: Session = De
     client = repos.GatewayClientRepo(db).get(client_id)
     if not client:
         flash(request, "Client not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     try:
         client.name = form["name"]
@@ -352,18 +352,18 @@ async def update_proxy_client(request: Request, client_id: int, db: Session = De
         traceback.print_exc()
         flash(request, f"Error updating client: {str(e)}", category="error")
 
-    return RedirectResponse(url="/proxies", status_code=303)
+    return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
 @router.post("/proxies/delete/client/{client_id}", response_class=RedirectResponse)
 async def delete_proxy_client(request: Request, client_id: int, db: Session = Depends(get_db)):
     client = repos.GatewayClientRepo(db).get(client_id)
     if not client:
         flash(request, "Client not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     if any(conn.client_id == client.id for conn in repos.GatewayConnectionRepo(db).list_all()):
         flash(request, "Client has active connections and cannot be deleted", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     try:
         repos.GatewayClientRepo(db).delete(client.id)
@@ -374,7 +374,7 @@ async def delete_proxy_client(request: Request, client_id: int, db: Session = De
         traceback.print_exc()
         flash(request, f"Error deleting client: {str(e)}", category="error")
 
-    return RedirectResponse(url="/proxies", status_code=303)
+    return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
 
 
@@ -388,7 +388,7 @@ def edit_proxy_connection(request: Request, connection_id: int, db: Session = De
     connection = repos.GatewayConnectionRepo(db).get(connection_id)
     if not connection:
         flash(request, "Connection not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
     
     clients = repos.GatewayClientRepo(db).list_all()
     protocols = [e.value for e in GatewayProtocol]
@@ -402,11 +402,11 @@ async def update_proxy_connection(request: Request, connection_id: int, db: Sess
     connection = repos.GatewayConnectionRepo(db).get(connection_id)
     if not connection:
         flash(request, "Connection not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     if connection.managed_by is not ManagedBy.USER:
         flash(request, "You are not allowed to edit this connection", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     try:
         connection.name = form["name"]
@@ -424,18 +424,18 @@ async def update_proxy_connection(request: Request, connection_id: int, db: Sess
         traceback.print_exc()
         flash(request, f"Error updating connection: {str(e)}", category="error")
 
-    return RedirectResponse(url="/proxies", status_code=303)
+    return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
 @router.post("/proxies/delete/connection/{connection_id}", response_class=RedirectResponse)
 async def delete_proxy_connection(request: Request, connection_id: int, db: Session = Depends(get_db)):
     connection = repos.GatewayConnectionRepo(db).get(connection_id)
     if not connection:
         flash(request, "Connection not found", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     if connection.managed_by is not ManagedBy.USER:
         flash(request, "You are not allowed to delete this connection", category="error")
-        return RedirectResponse(url="/proxies", status_code=303)
+        return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
     try:
         repos.GatewayConnectionRepo(db).delete(connection.id)
@@ -443,7 +443,7 @@ async def delete_proxy_connection(request: Request, connection_id: int, db: Sess
         traceback.print_exc()
         flash(request, f"Error deleting connection: {str(e)}", category="error")
 
-    return RedirectResponse(url="/proxies", status_code=303)
+    return RedirectResponse(url=request.url_for("view_proxies"), status_code=303)
 
 
 
@@ -467,8 +467,9 @@ def view_routes(request: Request, db: Session = Depends(get_db)):
 @router.post("/routes/create", response_class=RedirectResponse)
 async def create_route(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
+    new_route = None
     try:
-        repos.NginxRouteRepo(db).create(
+        new_route = repos.NginxRouteRepo(db).create(
             NginxRoute(
                 domain_id=form["domain_id"],
                 subdomain=form["subdomain"],
@@ -483,15 +484,16 @@ async def create_route(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error creating route: {str(e)}", category="error")
+        return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
-    return RedirectResponse(url="/routes", status_code=303)
+    return RedirectResponse(url=request.url_for("edit_route", route_id=new_route.id), status_code=303)
 
 @router.get("/routes/edit/{route_id}", response_class=HTMLResponse)
 async def edit_route(request: Request, route_id: int, db: Session = Depends(get_db)):
     route = repos.NginxRouteRepo(db).get(route_id)
     if not route:
         flash(request, "Route not found", category="error")
-        return RedirectResponse(url="/routes", status_code=303)
+        return RedirectResponse(url=request.url_for("list_routes"), status_code=303)
 
     domains = repos.DomainRepo(db).list_all()
     protocols = [e.value for e in NginxRouteProtocol]
@@ -503,7 +505,7 @@ async def toggle_route(request: Request, route_id: int, db: Session = Depends(ge
     route = repos.NginxRouteRepo(db).get(route_id)
     if not route:
         flash(request, "Route not found", category="error")
-        return RedirectResponse(url="/routes", status_code=303)
+        return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
     try:
         route.active = not route.active
@@ -515,14 +517,14 @@ async def toggle_route(request: Request, route_id: int, db: Session = Depends(ge
         traceback.print_exc()
         flash(request, f"Error toggling route: {str(e)}", category="error")
 
-    return RedirectResponse(url="/routes", status_code=303)
+    return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
 @router.post("/routes/edit/{route_id}", response_class=RedirectResponse)
 async def update_route(request: Request, route_id: int, db: Session = Depends(get_db)):
     route = repos.NginxRouteRepo(db).get(route_id)
     if not route:
         flash(request, "Route not found", category="error")
-        return RedirectResponse(url="/routes", status_code=303)
+        return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
     form = await request.form()
     try:
@@ -539,7 +541,7 @@ async def update_route(request: Request, route_id: int, db: Session = Depends(ge
         traceback.print_exc()
         flash(request, f"Error updating route: {str(e)}", category="error")
 
-    return RedirectResponse(url="/routes", status_code=303)
+    return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
 @router.get("/routes/delete/{route_id}", response_class=RedirectResponse)
 async def delete_route(request: Request, route_id: int, db: Session = Depends(get_db)):
@@ -552,7 +554,7 @@ async def delete_route(request: Request, route_id: int, db: Session = Depends(ge
         traceback.print_exc()
         flash(request, f"Error deleting route: {str(e)}", category="error")
 
-    return RedirectResponse(url="/routes", status_code=303)
+    return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
 
 
@@ -568,7 +570,7 @@ async def create_host(request: Request, route_id: int, db: Session = Depends(get
     route = repos.NginxRouteRepo(db).get(route_id)
     if not route:
         flash(request, "Route not found", category="error")
-        return RedirectResponse(url="/routes", status_code=303)
+        return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
     try:
         host = NginxRouteHost(
@@ -585,19 +587,19 @@ async def create_host(request: Request, route_id: int, db: Session = Depends(get
         traceback.print_exc()
         flash(request, f"Error creating host: {str(e)}", category="error")
 
-    return RedirectResponse(url=f"/routes/edit/{route_id}", status_code=303)
+    return RedirectResponse(url=request.url_for("edit_route", route_id=route_id), status_code=303)
 
 @router.get("/routes/edit/{route_id}/hosts/{host_id}/toggle_active", response_class=RedirectResponse)
 async def toggle_host(request: Request, route_id: int, host_id: int, db: Session = Depends(get_db)):
     route = repos.NginxRouteRepo(db).get(route_id)
     if not route:
         flash(request, "Route not found", category="error")
-        return RedirectResponse(url="/routes", status_code=303)
+        return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
     host = next((h for h in route.hosts if h.id == host_id), None)
     if not host:
         flash(request, "Host not found", category="error")
-        return RedirectResponse(url=f"/routes/edit/{route_id}", status_code=303)
+        return RedirectResponse(url=request.url_for("edit_route", route_id=route_id), status_code=303)
 
     try:
         host.active = not host.active
@@ -606,19 +608,19 @@ async def toggle_host(request: Request, route_id: int, host_id: int, db: Session
         traceback.print_exc()
         flash(request, f"Error toggling host: {str(e)}", category="error")
 
-    return RedirectResponse(url=f"/routes/edit/{route_id}", status_code=303)
+    return RedirectResponse(url=request.url_for("edit_route", route_id=route_id), status_code=303)
 
 @router.post("/routes/edit/{route_id}/hosts/{host_id}/delete", response_class=RedirectResponse)
 async def delete_host(request: Request, route_id: int, host_id: int, db: Session = Depends(get_db)):
     route = repos.NginxRouteRepo(db).get(route_id)
     if not route:
         flash(request, "Route not found", category="error")
-        return RedirectResponse(url="/routes", status_code=303)
+        return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
 
     host = next((h for h in route.hosts if h.id == host_id), None)
     if not host:
         flash(request, "Host not found", category="error")
-        return RedirectResponse(url=f"/routes/edit/{route_id}", status_code=303)
+        return RedirectResponse(url=request.url_for("edit_route", route_id=route_id), status_code=303)
 
     try:
         route.hosts.remove(host)
@@ -627,7 +629,7 @@ async def delete_host(request: Request, route_id: int, host_id: int, db: Session
         traceback.print_exc()
         flash(request, f"Error deleting host: {str(e)}", category="error")
 
-    return RedirectResponse(url=f"/routes/edit/{route_id}", status_code=303)
+    return RedirectResponse(url=request.url_for("edit_route", route_id=route_id), status_code=303)
 
 
 
@@ -666,14 +668,14 @@ async def create_dns_record(request: Request, db: Session = Depends(get_db)):
         traceback.print_exc()
         flash(request, f"Error creating DNS record: {str(e)}", category="error")
 
-    return RedirectResponse(url="/dns", status_code=303)
+    return RedirectResponse(url=request.url_for("view_dns"), status_code=303)
 
 @router.get("/dns/edit/{record_id}", response_class=HTMLResponse)
 async def get_edit_dns_record(request: Request, record_id: int, db: Session = Depends(get_db)):
     record = repos.DnsRecordRepo(db).get(record_id)
     if not record:
         flash(request, "DNS record not found", category="error")
-        return RedirectResponse(url="/dns", status_code=303)
+        return RedirectResponse(url=request.url_for("view_dns"), status_code=303)
 
     domains = repos.DomainRepo(db).list_all()
     return templates.TemplateResponse("dns.edit.jinja2", {"request": request, "record": record, "domains": domains})
@@ -685,11 +687,11 @@ async def edit_dns_record(request: Request, record_id: int, db: Session = Depend
         record = repos.DnsRecordRepo(db).get(record_id)
         if not record:
             flash(request, "DNS record not found", category="error")
-            return RedirectResponse(url="/dns", status_code=303)
+            return RedirectResponse(url=request.url_for("view_dns"), status_code=303)
 
         if record.managed_by != "USER":
             flash(request, "You are not allowed to edit this DNS record", category="error")
-            return RedirectResponse(url="/dns", status_code=303)
+            return RedirectResponse(url=request.url_for("view_dns"), status_code=303)
 
         record.name = form["name"]
         record.domain_id = form["domain_id"]
@@ -704,7 +706,7 @@ async def edit_dns_record(request: Request, record_id: int, db: Session = Depend
         traceback.print_exc()
         flash(request, f"Error editing DNS record: {str(e)}", category="error")
 
-    return RedirectResponse(url="/dns", status_code=303)
+    return RedirectResponse(url=request.url_for("view_dns"), status_code=303)
 
 @router.post("/dns/delete/{record_id}", response_class=RedirectResponse)
 async def delete_dns_record(request: Request, record_id: int, db: Session = Depends(get_db)):
@@ -712,11 +714,11 @@ async def delete_dns_record(request: Request, record_id: int, db: Session = Depe
         dns_record = repos.DnsRecordRepo(db).get(record_id)
         if not dns_record:
             flash(request, "DNS record not found", category="error")
-            return RedirectResponse(url="/dns", status_code=303)
+            return RedirectResponse(url=request.url_for("view_dns"), status_code=303)
 
         repos.DnsRecordRepo(db).delete(record_id)
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error deleting DNS record: {str(e)}", category="error")
 
-    return RedirectResponse(url="/dns", status_code=303)
+    return RedirectResponse(url=request.url_for("view_dns"), status_code=303)
