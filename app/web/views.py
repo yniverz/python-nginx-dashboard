@@ -98,7 +98,7 @@ def login_submit(
 def logout(request: Request):
     request.session.clear()
     flash(request, "You have been logged out.", "success")
-    return RedirectResponse("/login", status_code=303)
+    return RedirectResponse(request.url_for("login_form"), status_code=303)
 
 
 
