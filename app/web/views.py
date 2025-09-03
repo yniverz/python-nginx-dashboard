@@ -57,7 +57,7 @@ def login_form(request: Request, next: str = "/"):
     if request.session.get("user_id"):
         dest = next if is_safe_path(next) else request.url_for("view_dashboard")
         return RedirectResponse(dest, status_code=303)
-    safe_next = next if is_safe_path(next) else "/"
+    safe_next = next if is_safe_path(next) else request.url_for("view_dashboard")
     return templates.TemplateResponse(
         "login.jinja2",
         {"request": request, "next_url": safe_next},
@@ -76,7 +76,7 @@ def login_submit(
     if not user:
         flash(request, "Invalid username or password.", "danger")
         # Re-render form with a 400 for nicer UX and to show the flash
-        safe_next = next if is_safe_path(next) else "/"
+        safe_next = next if is_safe_path(next) else request.url_for("view_dashboard")
         return templates.TemplateResponse(
             "login.jinja2",
             {"request": request, "next_url": safe_next},
