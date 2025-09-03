@@ -193,6 +193,7 @@ location {path} {{
             upstream_blocks += self._get_upstream(upstream_name, route.hosts)
 
             rewrite = "" if route.path_prefix == "/" else f"rewrite ^{route.path_prefix}(.*)$ /$1 break;"
+            backend_path_header = f"proxy_set_header X-Forwarded-Prefix {backend_path};" if backend_path else ""
             proxy_blocks += f"""
     location {path} {{
         {rewrite}
@@ -202,6 +203,7 @@ location {path} {{
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        {backend_path_header}
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
