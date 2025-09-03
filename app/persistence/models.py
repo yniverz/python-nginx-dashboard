@@ -80,8 +80,8 @@ class GatewayClient(Base):
     server: Mapped[GatewayServer] = relationship(backref="clients", lazy="joined")
 
 class GatewayProtocol(str, enum.Enum):
-    TCP = "TCP"
-    UDP = "UDP"
+    TCP = "tcp"
+    UDP = "udp"
 
 class GatewayFlag(str, enum.Flag):
     ENCRYPTED = "transport.useencryption = true"
