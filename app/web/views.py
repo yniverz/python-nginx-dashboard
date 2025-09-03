@@ -116,7 +116,7 @@ def view_publish(request: Request, db: Session = Depends(get_db)):
     job_result = get_job_result()
     if job_result:
         flash(request, f"{job_result}", "info")
-        return RedirectResponse("/", status_code=303)
+        return RedirectResponse(request.url_for("view_dashboard"), status_code=303)
 
     if not JOB_RUNNING:
         propagate_changes(db)
