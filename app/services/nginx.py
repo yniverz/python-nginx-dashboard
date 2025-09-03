@@ -1,32 +1,11 @@
-import subprocess
-from fastapi import Depends
 from requests import Session
 from app.persistence import repos
-from app.persistence.db import DBSession
 from app.persistence.models import NginxRoute, NginxRouteHost, NginxRouteProtocol
 from app.services.cloudflare import CloudFlareManager, cloudflare_ip_cache
 from app.config import settings
-from app.services.common import propagate_changes
 
 
 
-
-
-def background_publish():
-    with DBSession() as db:
-        NginxConfigGenerator(db, dry_run=not settings.ENABLE_NGINX)
-
-        CloudFlareManager(db)
-
-    if settings.ENABLE_NGINX:
-        reload_nginx()
-
-
-def reload_nginx():
-    """
-    Reload the Nginx configuration.
-    """
-    subprocess.run(settings.NGINX_RELOAD_CMD.split(" "), check=True)
 
 class NginxConfigGenerator:
     def __init__(self, db: Session, dry_run: bool = False):

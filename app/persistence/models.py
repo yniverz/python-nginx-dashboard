@@ -16,7 +16,6 @@ class Domain(Base):
     __tablename__ = "domains"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), unique=True)
-    zone_id: Mapped[str | None] = mapped_column(String(128))
     auto_wildcard: Mapped[bool] = mapped_column(Boolean, default=True)
     use_for_direct_prefix: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -27,21 +26,44 @@ class DnsRecord(Base):
     name: Mapped[str] = mapped_column(String(255))      # relative: "@", "api", "foo.bar"
     type: Mapped[DnsType] = mapped_column(Enum(DnsType))
     content: Mapped[str] = mapped_column(String(1024))  # IP, target FQDN, or SRV JSON
-    ttl: Mapped[int | None] = mapped_column(Integer)    # seconds
+    ttl: Mapped[int | None] = mapped_column(Integer, default=1)    # seconds
     priority: Mapped[int | None] = mapped_column(Integer)
     proxied: Mapped[bool | None] = mapped_column(Boolean)
     managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy), default=ManagedBy.USER)
-    meta: Mapped[dict | None] = mapped_column(JSON)
+    meta: Mapped[dict | None] = mapped_column(JSON, default=dict)
 
     __table_args__ = (UniqueConstraint("domain_id", "name", "type", "content", name="uq_dns_key"),)
 
     domain: Mapped[Domain] = relationship(backref="dns_records", lazy="joined")
 
+class DnsRecordArchive(Base):
+    __tablename__ = "dns_records_archive"
+
+    id: Mapped[int] = mapped_column(primary_key=True)          # archive row id
+    domain_id: Mapped[int | None] = mapped_column(ForeignKey("domains.id"))
+    name: Mapped[str] = mapped_column(String(255))
+    type: Mapped[DnsType] = mapped_column(Enum(DnsType))
+    content: Mapped[str] = mapped_column(String(1024))
+    managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy))
+
+    # (No unique constraint on name/type/content here; we want to allow history)
+    domain: Mapped["Domain"] = relationship(lazy="joined")
+
+    @classmethod
+    def from_dns_record(cls, rec: "DnsRecord") -> "DnsRecordArchive":
+        return cls(
+            domain_id=rec.domain_id,
+            name=rec.name,
+            type=rec.type,
+            content=rec.content,
+            managed_by=rec.managed_by,
+        )
+
 
 class GatewayServer(Base):
     __tablename__ = "gateway_servers"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(64), unique=True)
     host: Mapped[str] = mapped_column(String(45))
     bind_port: Mapped[int] = mapped_column(Integer)
     auth_token: Mapped[str] = mapped_column(String(128))
@@ -50,7 +72,7 @@ class GatewayServer(Base):
 class GatewayClient(Base):
     __tablename__ = "gateway_clients"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(64), unique=True)
     server_id: Mapped[int] = mapped_column(ForeignKey("gateway_servers.id"))
     is_origin: Mapped[bool] = mapped_column(Boolean, default=False)
     last_config_pull_time: Mapped[datetime | None] = mapped_column(DateTime)
@@ -100,7 +122,7 @@ class NginxRoute(Base):
     __tablename__ = "nginx_routes"
     id: Mapped[int] = mapped_column(primary_key=True)
     domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id"))
-    subdomain: Mapped[str] = mapped_column(String(255))  # "@", "app", "api.v2"
+    subdomain: Mapped[str] = mapped_column(String(255))
     protocol: Mapped[NginxRouteProtocol] = mapped_column(Enum(NginxRouteProtocol), default=NginxRouteProtocol.HTTP)
     path_prefix: Mapped[str] = mapped_column(String(255), default="/")
     backend_path: Mapped[str] = mapped_column(String(255), default="")

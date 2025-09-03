@@ -2,13 +2,52 @@
 
 
 
-from fastapi import Depends
+import subprocess
+import traceback
 from requests import Session
-
 from app.config import settings
 from app.persistence import repos
-from app.persistence.db import get_db
+from app.persistence.db import DBSession
 from app.persistence.models import DnsRecord, GatewayConnection, GatewayProtocol, ManagedBy
+from app.services.cloudflare import CloudFlareManager
+from app.services.nginx import NginxConfigGenerator
+
+
+
+JOB_RUNNING = False
+JOB_RESULT = None
+
+def get_job_result():
+    global JOB_RESULT
+
+    r = JOB_RESULT
+    JOB_RESULT = None
+    return r
+
+def background_publish():
+    global JOB_RUNNING, JOB_RESULT
+
+    if JOB_RUNNING:
+        return
+
+    JOB_RUNNING = True
+    try:
+        with DBSession() as db:
+            NginxConfigGenerator(db, dry_run=not settings.ENABLE_NGINX)
+
+            CloudFlareManager(db)
+
+        if settings.ENABLE_NGINX:
+            subprocess.run(settings.NGINX_RELOAD_CMD.split(" "), check=True)
+        JOB_RESULT = "Publish job completed successfully."
+
+    except Exception as e:
+        JOB_RESULT = f"Publish job failed: {str(e)}"
+        traceback.print_exc()
+
+    finally:
+        JOB_RUNNING = False
+
 
 
 def propagate_changes(db: Session):

@@ -4,39 +4,6 @@
 <h1>DNS</h1>
 
 
-{# class ManagedBy(str, enum.Enum):
-    SYSTEM = "SYSTEM"
-    USER = "USER"
-    IMPORTED = "IMPORTED"
-
-class DnsType(str, enum.Enum):
-    A="A"; AAAA="AAAA"; CNAME="CNAME"; TXT="TXT"; MX="MX"; NS="NS"; SRV="SRV"
-
-class Domain(Base):
-    __tablename__ = "domains"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), unique=True)
-    zone_id: Mapped[str | None] = mapped_column(String(128))
-    auto_wildcard: Mapped[bool] = mapped_column(Boolean, default=True)
-    use_for_direct_prefix: Mapped[bool] = mapped_column(Boolean, default=False)
-
-class DnsRecord(Base):
-    __tablename__ = "dns_records"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id"))
-    name: Mapped[str] = mapped_column(String(255))      # relative: "@", "api", "foo.bar"
-    type: Mapped[DnsType] = mapped_column(Enum(DnsType))
-    content: Mapped[str] = mapped_column(String(1024))  # IP, target FQDN, or SRV JSON
-    ttl: Mapped[int | None] = mapped_column(Integer)    # seconds
-    priority: Mapped[int | None] = mapped_column(Integer)
-    proxied: Mapped[bool | None] = mapped_column(Boolean)
-    managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy), default=ManagedBy.USER)
-    meta: Mapped[dict | None] = mapped_column(JSON)
-
-    __table_args__ = (UniqueConstraint("domain_id", "name", "type", name="uq_dns_key"),)
-
-    domain: Mapped[Domain] = relationship(backref="dns_records", lazy="joined") #}
-
 <form method="POST" action="{{ url_for('create_dns_record') }}">
     <input type="text" name="name" placeholder="Name" required>
     <select name="domain_id" required>

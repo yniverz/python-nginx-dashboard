@@ -1,17 +1,20 @@
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from pathlib import Path
 import cloudflare
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    
     APP_NAME: str = "Multi-Domain Edge Manager"
     DATA_DIR: str = Field(default="data")
     SQLITE_PATH: str | None = None  # if None, will be data/app.db
-    LOCAL_IP: str = os.getenv("LOCAL_IP", "localhost")
+    LOCAL_IP: str = "localhost"
 
-    WEB_USERNAME: str = os.getenv("WEB_USERNAME", "admin")
-    WEB_PASSWORD: str = os.getenv("WEB_PASSWORD", "admin")
+    WEB_USERNAME: str = "admin"
+    WEB_PASSWORD: str = "admin"
 
     # Nginx (optional)
     NGINX_HTTP_CONF_PATH: str = "/etc/nginx/conf.d/edge_http.conf"
@@ -22,12 +25,12 @@ class Settings(BaseSettings):
 
     # DNS provider default (Cloudflare)
     DEFAULT_DNS_PROVIDER: str = "cloudflare"
-    CLOUDFLARE_API_TOKEN: str = os.getenv("CLOUDFLARE_API_TOKEN", "")
+    CLOUDFLARE_API_TOKEN: str = ""
 
-    CF_ORIGIN_CA_KEY: str = os.getenv("CF_ORIGIN_CA_KEY", "")
-    CF_REQUESTED_VALIDITY_DAYS: int = int(os.getenv("CF_REQUESTED_VALIDITY_DAYS", "5475"))  # ~15y
-    CF_KEY_TYPE: str = os.getenv("CF_KEY_TYPE", "rsa")  # "rsa" or "ecdsa"
-    CF_RSA_BITS: int = int(os.getenv("CF_RSA_BITS", "2048"))  # 2048 or 4096
+    CF_ORIGIN_CA_KEY: str = ""
+    CF_REQUESTED_VALIDITY_DAYS: int = 5475  # ~15y
+    CF_KEY_TYPE: str = "rsa"  # "rsa" or "ecdsa"
+    CF_RSA_BITS: int = 2048  # 2048 or 4096
 
     CF: cloudflare.Cloudflare | None = None
 
@@ -36,8 +39,6 @@ class Settings(BaseSettings):
             api_token=self.CLOUDFLARE_API_TOKEN,
             user_service_key=self.CF_ORIGIN_CA_KEY
         )
-
-        return super().model_post_init(__context)
 
     def db_path(self) -> str:
         if self.SQLITE_PATH:

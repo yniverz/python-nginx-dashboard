@@ -1,18 +1,21 @@
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import ipaddress
 import json
 import os
 import stat
 import time
-from typing import Optional
+from typing import Optional, Union
 import cloudflare
+import cloudflare.types.zones
 import requests
 from pathlib import Path
 import datetime
 import subprocess
 import ipaddress
 from app.config import settings
+from app.persistence import repos
+from app.persistence.models import DnsRecord, ManagedBy
 
 
 
@@ -107,21 +110,145 @@ cloudflare_ip_cache.get()
 
 
 
+@dataclass(frozen=True)
+class SharedRecordType:
+    domain: str
+    name: str
+    type: str
+    content: str
+    managed_by: str = field(compare=False, hash=False)
+    record_id: Union[int, str] = field(compare=False, hash=False, default=None)
+
 class CloudFlareManager:
     """Manage Cloudflare DNS records."""
 
     def __init__(self, db: requests.Session):
         self.db = db
         self.cf = settings.CF
+        self.zones = self.cf.zones.list()
+        self.entries_by_zone: dict[str, None] = {}
+        self.domains = repos.DomainRepo(db).list_all()
 
-        print(self._get_entries())
+        self.remote_entries: set[SharedRecordType] = set()
+        self.local_entries: set[SharedRecordType] = set()
 
-    def _get_entries(self):
-        return self.cf.dns.records.list(zone_id=self.zone_id)
+        self.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
 
+        repos.DnsRecordRepo(self.db).delete_all_managed_by(ManagedBy.IMPORTED)
+        for domain in self.domains:
+            zone = self._get_zone(domain.name)
+            if zone:
+                entries = self.cf.dns.records.list(zone_id=zone.id)
+                self.entries_by_zone[zone.id] = entries
+                for entry in entries:
+                    shared_rec = self._get_shared_record_from_cf(domain.name, entry)
 
+                    existing_local = next((e for e in self.local_entries if e == shared_rec), None)
+                    if existing_local:
+                        shared_rec = replace(shared_rec, managed_by=existing_local.managed_by)
+                    else:
+                        repos.DnsRecordRepo(self.db).create(
+                            DnsRecord(
+                                domain_id=domain.id,
+                                name=entry.name,
+                                type=entry.type,
+                                content=entry.content,
+                                ttl=entry.ttl,
+                                priority=entry.priority if hasattr(entry, 'priority') else None,
+                                proxied=entry.proxied,
+                                managed_by=ManagedBy.IMPORTED,
+                                meta=entry.meta,
+                            )
+                        )
+                    self.remote_entries.add(shared_rec)
 
+        # go through archived records and see if they still exist, if yes, delete first.
+        for entry in repos.DnsRecordRepo(self.db).list_archived():
+            print(entry.name)
+            shared_rec = self._get_shared_record_from_db(entry)
+            if shared_rec in self.remote_entries and entry.managed_by != ManagedBy.IMPORTED:
+                self._delete_cloudflare_record(entry)
+                self.remote_entries.discard(shared_rec)
+            repos.DnsRecordRepo(self.db).delete_archived(entry.id)
 
+        missing_remote = self.local_entries - self.remote_entries
+        for entry in missing_remote:
+            db_record = self._get_db_record_from_shared(entry)
+            if not db_record:
+                print("Missing remote entry found in DB:", entry.name, entry.type, entry.content, entry.managed_by)
+                continue
+
+            self._create_cloudflare_record(db_record)
+
+        # for e in self.local_entries:
+        #     print(e.name, e.type, e.content, e.managed_by)
+        # print("---")
+        # for e in self.remote_entries:
+        #     print(e.name, e.type, e.content, e.managed_by)
+
+    def _delete_cloudflare_record(self, record: DnsRecord) -> None:
+        print("Deleting Cloudflare record:", self._get_fqdn(record))
+        record_id, zone_id = self._get_cf_record_id(record)
+        if not record_id:
+            return
+        self.cf.dns.records.delete(record_id, zone_id=zone_id)
+
+    def _create_cloudflare_record(self, record: DnsRecord) -> None:
+        print("Creating Cloudflare record:", self._get_fqdn(record))
+        self.cf.dns.records.create(
+            zone_id=self._get_zone(record.domain.name).id,
+            name=self._get_fqdn(record),
+            type=record.type.name,
+            content=record.content,
+            ttl=record.ttl,
+            priority=record.priority,
+            proxied=record.proxied,
+        )
+
+    def _get_db_record_from_shared(self, shared: SharedRecordType) -> DnsRecord:
+        return next((r for r in repos.DnsRecordRepo(self.db).list_all() if
+                     r.domain.name == shared.domain and
+                     self._get_fqdn(r) == shared.name and
+                     r.type == shared.type and
+                     r.content == shared.content), None)
+
+    def _get_shared_record_from_db(self, record: DnsRecord) -> SharedRecordType:
+        name = self._get_fqdn(record)
+        return SharedRecordType(
+            domain=record.domain.name,
+            name=name,
+            type=record.type.name,
+            content=record.content,
+            managed_by=record.managed_by,
+        )
+
+    def _get_fqdn(self, record: DnsRecord) -> str:
+        return f"{record.name}.{record.domain.name}" if record.name != "@" else record.domain.name
+
+    def _get_shared_record_from_cf(self, domain: str, record) -> SharedRecordType:
+        return SharedRecordType(
+            domain=domain,
+            name=record.name,
+            type=record.type,
+            content=record.content,
+            managed_by=ManagedBy.IMPORTED,
+            record_id=record.id,
+        )
+
+    def _get_zone(self, domain: str) -> cloudflare.types.zones.Zone | None:
+        for zone in self.zones:
+            if zone.name == domain:
+                return zone
+        return None
+
+    def _get_cf_record_id(self, record: DnsRecord) -> tuple[int | str | None, str | None]:
+        zone = self._get_zone(record.domain.name)
+        if not zone:
+            return None, None
+        for entry in self.entries_by_zone.get(zone.id, []):
+            if entry.name == self._get_fqdn(record) and entry.type == record.type and entry.content == record.content:
+                return entry.id, zone.id
+        return None, None
 
 
 class CloudFlareWildcardManager:

@@ -1,6 +1,7 @@
 from datetime import datetime
 import threading
 import traceback
+from typing import Union
 from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -13,8 +14,7 @@ from app.persistence.models import (
     Domain, GatewayClient, GatewayConnection, GatewayFlag, GatewayProtocol, GatewayServer, NginxRoute,
     DnsRecord, ManagedBy, NginxRouteHost, NginxRouteProtocol
 )
-from app.services.common import propagate_changes
-from app.services.nginx import background_publish
+from app.services.common import JOB_RUNNING, get_job_result, propagate_changes, background_publish
 
 templates = Jinja2Templates(directory="app/web/templates")
 router = APIRouter()
@@ -105,16 +105,22 @@ def view_dashboard(request: Request, db: Session = Depends(get_db)):
 
 
 
-@router.get("/publish", response_class=HTMLResponse)
+@router.get("/publish", response_class=Union[HTMLResponse, RedirectResponse])
 def view_publish(request: Request, db: Session = Depends(get_db)):
-    propagate_changes(db)
-    threading.Thread(target=background_publish).start()
-    
+    job_result = get_job_result()
+    if job_result:
+        flash(request, f"{job_result}", "info")
+        return RedirectResponse("/", status_code=303)
+
+    if not JOB_RUNNING:
+        propagate_changes(db)
+        threading.Thread(target=background_publish).start()
+
     return HTMLResponse("""
 <!DOCTYPE html>
 <html>
 <head>
-    <meta http-equiv="refresh" content="5;url=/">
+    <meta http-equiv="refresh" content="2;url=/publish">
     <title>Publishing...</title>
 </head>
 <body>
@@ -143,7 +149,6 @@ async def create_domain(request: Request, db: Session = Depends(get_db)):
         repos.DomainRepo(db).create(
             Domain(
                 name=form["name"],
-                zone_id=form["zone_id"]
             )
         )
 
@@ -172,7 +177,11 @@ async def edit_domain(request: Request, domain_id: int, action: str, db: Session
                 domain.use_for_direct_prefix = not domain.use_for_direct_prefix
                 repos.DomainRepo(db).update(domain)
         elif action == "delete":
-            repos.DomainRepo(db).delete(domain_id)
+            if not repos.NginxRouteRepo(db).exists_with_domain_id(domain_id):
+                repos.DnsRecordRepo(db).delete_all_with_domain_id(domain_id)
+                repos.DomainRepo(db).delete(domain_id)
+            else:
+                flash(request, "Cannot delete domain with existing DNS records or Nginx routes.", category="error")
 
         propagate_changes(db)
 
@@ -698,7 +707,7 @@ async def delete_dns_record(request: Request, record_id: int, db: Session = Depe
             flash(request, "DNS record not found", category="error")
             return RedirectResponse(url="/dns", status_code=303)
 
-        repos.DnsRecordRepo(db).delete(dns_record)
+        repos.DnsRecordRepo(db).delete(record_id)
     except Exception as e:
         traceback.print_exc()
         flash(request, f"Error deleting DNS record: {str(e)}", category="error")

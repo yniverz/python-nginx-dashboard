@@ -5,24 +5,22 @@
 <h3>Add Domain</h3>
 <form method="post" action="/domains/create">
   <label>Name:</label> <input name="name" required />
-  <label>Zone ID:</label> <input name="zone_id" required />
   <button type="submit">Create</button>
 </form>
 
 <br>
 
 <table>
-  <tr><th>Name</th><th>Zone ID</th><th>Auto Wildcard</th><th>Use for Direct Prefix</th><th></th></tr>
+  <tr><th>Name</th><th>Auto Wildcard</th><th>Use for Direct Prefix</th><th></th></tr>
   {% for d in domains %}
   <tr>
     <td>{{ d.name }}</td>
-    <td>{{ d.zone_id or "-" }}</td>
     <td><a href="/domains/edit/{{ d.id }}/toggle_auto_wildcard">{{ d.auto_wildcard }}</a></td>
     <td><a href="/domains/edit/{{ d.id }}/toggle_use_for_direct_prefix">{{ d.use_for_direct_prefix }}</a></td>
     <td><a href="/domains/edit/{{ d.id }}/delete">Remove</a></td>
   </tr>
   {% endfor %}
-  {% if not domains %}<tr><td colspan="5" class="muted">No domains yet</td></tr>{% endif %}
+  {% if not domains %}<tr><td colspan="4" class="muted">No domains yet</td></tr>{% endif %}
 </table>
 
 {% endblock %}

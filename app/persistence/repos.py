@@ -2,7 +2,7 @@ from typing import Sequence
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from app.persistence.models import (
-    Domain, NginxRoute,
+    DnsRecordArchive, Domain, NginxRoute,
     DnsRecord, ManagedBy,
     GatewayServer, GatewayClient, GatewayConnection
 )
@@ -86,6 +86,8 @@ class NginxRouteRepo:
         return list(self.db.scalars(select(NginxRoute).where(NginxRoute.domain_id==domain_id).options(selectinload(NginxRoute.hosts))))
     def get(self, id: int) -> NginxRoute | None:
         return self.db.get(NginxRoute, id)
+    def exists_with_domain_id(self, domain_id: int) -> bool:
+        return self.db.scalar(select(NginxRoute).where(NginxRoute.domain_id==domain_id)) is not None
     def update(self, r: NginxRoute) -> NginxRoute:
         self.db.add(r); self.db.commit(); self.db.refresh(r); return r
     def create(self, r: NginxRoute) -> NginxRoute:
@@ -118,17 +120,46 @@ class DnsRecordRepo:
             DnsRecord.type==type
         ))
     def create(self, rec: DnsRecord) -> DnsRecord:
+        archive = self.db.scalar(select(DnsRecordArchive).where(
+            DnsRecordArchive.name==rec.name,
+            DnsRecordArchive.type==rec.type,
+            DnsRecordArchive.content==rec.content
+        ))
+        if archive:
+            self.db.delete(archive)
+
         self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
     def update(self, rec: DnsRecord) -> DnsRecord:
+        old = self.get(rec.id)
+        if old and (old.name != rec.name or old.type != rec.type or old.content != rec.content):
+            archive = DnsRecordArchive.from_dns_record(old)
+            self.db.add(archive)
         self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
     def delete(self, id: int) -> None:
         obj = self.get(id)
         if obj:
+            archive = DnsRecordArchive.from_dns_record(obj)
+            self.db.add(archive)
             self.db.delete(obj)
             self.db.commit()
-    def upsert_user(self, rec: DnsRecord) -> DnsRecord:
-        self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
-    def delete_user(self, id: int) -> None:
-        self.db.execute(delete(DnsRecord).where(DnsRecord.id==id, DnsRecord.managed_by==ManagedBy.USER)); self.db.commit()
+    def delete_all_with_domain_id(self, domain_id: int) -> None:
+        self.db.add_all([DnsRecordArchive.from_dns_record(rec) for rec in self.list_by_domain(domain_id)])
+        self.db.execute(delete(DnsRecord).where(DnsRecord.domain_id==domain_id))
+        self.db.commit()
     def delete_all_managed_by(self, managed_by: ManagedBy) -> None:
+        self.db.add_all([DnsRecordArchive.from_dns_record(rec) for rec in self.list_all(include=[managed_by])])
         self.db.execute(delete(DnsRecord).where(DnsRecord.managed_by==managed_by)); self.db.commit()
+
+
+    # def upsert_user(self, rec: DnsRecord) -> DnsRecord:
+    #     self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
+    # def delete_user(self, id: int) -> None:
+    #     self.db.execute(delete(DnsRecord).where(DnsRecord.id==id, DnsRecord.managed_by==ManagedBy.USER)); self.db.commit()
+
+    def list_archived(self) -> list[DnsRecordArchive]:
+        return list(self.db.scalars(select(DnsRecordArchive)))
+    def delete_archived(self, id: int) -> None:
+        obj = self.db.get(DnsRecordArchive, id)
+        if obj:
+            self.db.delete(obj)
+            self.db.commit()
