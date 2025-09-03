@@ -27,7 +27,7 @@ def get_gateway_server(server_id: str, db: Session = Depends(get_db), x_gateway_
     if x_gateway_token != server.auth_token:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    return generate_server_toml(server)
+    return PlainTextResponse(generate_server_toml(server))
 
 @router.get("/gateway/client/{client_id}", response_class=PlainTextResponse)
 def get_gateway_client(client_id: str, db: Session = Depends(get_db), x_gateway_token: str | None = Header(None)):
@@ -42,4 +42,4 @@ def get_gateway_client(client_id: str, db: Session = Depends(get_db), x_gateway_
     if x_gateway_token != client.server.auth_token:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    return generate_client_toml(db, client)
+    return PlainTextResponse(generate_client_toml(db, client))
