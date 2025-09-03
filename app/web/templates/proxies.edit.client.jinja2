@@ -4,7 +4,7 @@
 
 {% block content %}
 <h2>Edit Proxy Client</h2>
-<form method="post" action="">
+<form method="post" action="{{ url_for('update_proxy_client', client_id=client.id) }}">
     <div>
         <label for="name">Client Name:</label>
         <input type="text" id="name" name="name" value="{{ client.name }}" required>

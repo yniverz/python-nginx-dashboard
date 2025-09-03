@@ -5,7 +5,7 @@
     <h1>Proxies</h1>
 
     <h2>Gateway Connections</h2>
-    <form method="post" action="/proxies/create/connection" {% if not clients %}class="muted"{% endif %}>
+    <form method="post" action="{{ url_for('create_proxy', proxy_type='connection') }}" {% if not clients %}class="muted"{% endif %}>
         <input type="text" name="name" placeholder="Name" required>
         <select name="client_id" required>
             {% for client in clients %}
@@ -45,7 +45,7 @@
                 <td>{{ proxy.remote_port }}</td>
                 <td>{{ proxy.managed_by.name }}</td>
                 <td>
-                    <a href="/proxies/edit/connection/{{ proxy.id }}">Edit</a>
+                    <a href="{{ url_for('edit_proxy_connection', connection_id=proxy.id) }}">Edit</a>
                 </td>
             </tr>
             {% endfor %}
@@ -58,7 +58,7 @@
     </table>
 
     <h2>Gateway Clients</h2>
-    <form method="post" action="/proxies/create/client" {% if not servers %}class="muted"{% endif %}>
+    <form method="post" action="{{ url_for('create_proxy', proxy_type='client') }}" {% if not servers %}class="muted"{% endif %}>
         <input type="text" name="name" placeholder="Name" required>
         <select name="server_id" required>
             {% for server in servers %}
@@ -92,7 +92,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a href="/proxies/edit/client/{{ client.id }}">Edit</a>
+                    <a href="{{ url_for('edit_proxy_client', client_id=client.id) }}">Edit</a>
                 </td>
             </tr>
             {% endfor %}
@@ -105,7 +105,7 @@
     </table>
 
     <h2>Gateway Servers</h2>
-    <form method="post" action="/proxies/create/server">
+    <form method="post" action="{{ url_for('create_proxy', proxy_type='server') }}">
         <input type="text" name="name" placeholder="Name" required>
         <input type="text" name="host" placeholder="Host" required>
         <input type="number" name="bind_port" placeholder="Bind Port" required>
@@ -135,7 +135,7 @@
                     <td>N/A</td>
                 {% endif %}
                 <td>
-                    <a href="/proxies/edit/server/{{ server.id }}">Edit</a>
+                    <a href="{{ url_for('edit_proxy_server', server_id=server.id) }}">Edit</a>
                 </td>
             </tr>
             {% endfor %}

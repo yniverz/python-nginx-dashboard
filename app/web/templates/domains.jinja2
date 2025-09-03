@@ -3,7 +3,7 @@
 <h1>Domains</h1>
 
 <h3>Add Domain</h3>
-<form method="post" action="/domains/create">
+<form method="post" action="{{ url_for('create_domain') }}">
   <label>Name:</label> <input name="name" required />
   <button type="submit">Create</button>
 </form>
@@ -15,9 +15,9 @@
   {% for d in domains %}
   <tr>
     <td>{{ d.name }}</td>
-    <td><a href="/domains/edit/{{ d.id }}/toggle_auto_wildcard">{{ d.auto_wildcard }}</a></td>
-    <td><a href="/domains/edit/{{ d.id }}/toggle_use_for_direct_prefix">{{ d.use_for_direct_prefix }}</a></td>
-    <td><a href="/domains/edit/{{ d.id }}/delete">Remove</a></td>
+    <td><a href="{{ url_for('edit_domain', domain_id=d.id, action='toggle_auto_wildcard') }}">{{ d.auto_wildcard }}</a></td>
+    <td><a href="{{ url_for('edit_domain', domain_id=d.id, action='toggle_use_for_direct_prefix') }}">{{ d.use_for_direct_prefix }}</a></td>
+    <td><a href="{{ url_for('edit_domain', domain_id=d.id, action='delete') }}">Remove</a></td>
   </tr>
   {% endfor %}
   {% if not domains %}<tr><td colspan="4" class="muted">No domains yet</td></tr>{% endif %}

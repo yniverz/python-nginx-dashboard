@@ -1,6 +1,6 @@
 <h2>Log in</h2>
 
-<form method="post" action="/login" class="form-box">
+<form method="post" action="{{ url_for('login_submit') }}" class="form-box">
   <input type="hidden" name="next" value="{{ next_url }}"/>
 
   <div class="form-group">

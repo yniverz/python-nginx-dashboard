@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Edit Route</h1>
 
-<form method="post" action="">
+<form method="post" action="{{ url_for('update_route', route_id=route.id) }}">
     <div>
         <label for="domain_id">Domain:</label>
         <select id="domain_id" name="domain_id">

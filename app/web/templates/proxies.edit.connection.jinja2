@@ -4,7 +4,7 @@
 
 {% block content %}
 <h2>Edit Proxy Connection</h2>
-<form method="post" action="">
+<form method="post" action="{{ url_for('update_proxy_connection', connection_id=connection.id) }}">
     <div>
         <label for="name">Connection Name:</label>
         <input type="text" id="name" name="name" value="{{ connection.name }}" required>
