@@ -23,6 +23,21 @@ router = APIRouter()
 Base.metadata.create_all(bind=engine)
 
 
+
+
+@router.get("/static/styles.css", response_class=HTMLResponse)
+def static_styles(request: Request):
+    return templates.TemplateResponse("static/styles.css", {"request": request})
+
+
+
+
+
+
+
+
+
+
 def flash(request: Request, message: str, category: str = "info") -> None:
     # Store messages in session (list of dicts)
     bucket = request.session.get("_flashes", [])
@@ -46,6 +61,7 @@ def authenticate(db: Session, username: str, password: str):
     if username == settings.WEB_USERNAME and password == settings.WEB_PASSWORD:
         return {"id": 1, "username": "admin"}
     return None
+
 
 
 @router.get("/login", response_class=HTMLResponse)

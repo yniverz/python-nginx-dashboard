@@ -36,7 +36,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SessionMiddleware, secret_key="test")
     app.include_router(api.router)
     app.include_router(views.router)
-    app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
+    # app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 
     
     return app
