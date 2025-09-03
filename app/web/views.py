@@ -25,15 +25,6 @@ Base.metadata.create_all(bind=engine)
 
 
 
-@router.get("/static/{path:path}", response_class=FileResponse)
-def static_files(request: Request, path: str):
-    return FileResponse(f"app/web/static/{path}")
-
-
-
-
-
-
 def flash(request: Request, message: str, category: str = "info") -> None:
     # Store messages in session (list of dicts)
     bucket = request.session.get("_flashes", [])
