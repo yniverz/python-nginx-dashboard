@@ -91,7 +91,7 @@ def login_submit(
         request.session["remember"] = True
 
     flash(request, f"Welcome back, {user['username']}!", "success")
-    dest = next if is_safe_path(next) else "/"
+    dest = next if is_safe_path(next) else request.url_for("view_dashboard")
     return RedirectResponse(dest, status_code=303)
 
 @router.get("/logout")
