@@ -4,12 +4,13 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.web import views, api
+from app.config import settings
 
 PUBLIC_PATHS = {"/login"}
 PUBLIC_PREFIXES = ("/static", "/docs", "/redoc", "/openapi.json")
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Multi-Domain Edge Manager")
+    app = FastAPI(title="Multi-Domain Edge Manager", root_path=settings.ROOT_PATH or "")
     @app.middleware("http")
     async def auth_and_flash(request: Request, call_next):
         # -- flash messages (your existing behavior) --

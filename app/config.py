@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     
     APP_NAME: str = "Multi-Domain Edge Manager"
+    ROOT_PATH: str = ""
     LISTEN_PORT: int = 8000
     DATA_DIR: str = Field(default="data")
     SQLITE_PATH: str | None = None  # if None, will be data/app.db
