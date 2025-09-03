@@ -126,7 +126,7 @@ def view_publish(request: Request, db: Session = Depends(get_db)):
 <!DOCTYPE html>
 <html>
 <head>
-    <meta http-equiv="refresh" content="2;url={request.url_for('view_publish')}">
+    <meta http-equiv="refresh" content="5;url={request.url_for('view_publish')}">
     <title>Publishing...</title>
 </head>
 <body>
