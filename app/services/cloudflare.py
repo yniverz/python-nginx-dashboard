@@ -358,38 +358,6 @@ class CloudFlareOriginCAManager:
 
         return fqdn_labels
 
-    def old_sync(self, labels: list[str]) -> dict[str, tuple[str, str]]:
-        """
-        Make sure every *label* in `labels` has a fresh Origin-CA cert and
-        revoke anything else. Returns `{label: (crt_path, key_path)}`.
-        """
-        existing = self._index_existing()        # {label: {...}}
-        wanted   = set(labels)
-        if "" not in wanted: # ensure root wildcard
-            wanted.add("")
-
-        paths: dict[str, tuple[str, str]] = {}
-
-        # create / renew ------------------------------------------------
-        for label in wanted:
-            info = existing.get(label)
-            if info and not self._expiring(info["expires"]):
-                paths[label] = self._write_to_disk(label, info)
-                continue
-
-            key_p, csr_p = self._ensure_key_and_csr(label)
-            cert = self._upload_csr(label, csr_p.read_text())
-            paths[label] = self._write_to_disk(label, cert, is_new=True)
-
-        # revoke obsolete ---------------------------------------------
-        for label in existing.keys() - wanted:
-            self.cf.origin_ca_certificates.delete(existing[label]["id"])
-            print(f"[Origin-CA] revoked {existing[label]['id']} "
-                  f"({label or '*'}.{self.domain})")
-
-        return paths
-
-
     def _index_existing(self):
         zone_ids = {(zone.id, zone.name) for zone in self.cf_cache.zones}
         existing: dict[str, dict[str, CACertificateIdentifier]] = {}
@@ -402,42 +370,6 @@ class CloudFlareOriginCAManager:
                 private_key="",  # only present on create
             ) for c in certs}
         return existing
-
-    def old_index_existing(self) -> dict[str, dict]:
-        """
-        Gather non-revoked certs belonging to *this* domain.
-        """
-        out: dict[str, dict] = {}
-        page = 1
-        while True:
-            resp = self.cf.origin_ca_certificates.list(
-                zone_id=self.zone_id,
-                page=page,
-                per_page=100
-            )
-
-            if not resp.result or len(resp.result) == 0:
-                break
-
-            for c in resp.result:
-                
-                hosts = sorted(c.hostnames)
-                label = (
-                    ""
-                    if hosts == [self.domain, f"*.{self.domain}"]
-                    else hosts[0][2 : -(len(self.domain) + 1)]
-                )
-                out[label] = {
-                    "id":          c.id,
-                    "expires":     datetime.datetime.strptime(c.expires_on.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S %z"),
-                    "certificate": c.certificate,
-                    "private_key": "",  # only present on create
-                }
-
-            # if page >= resp.res["result_info"]["total_pages"]:
-            #     break
-            page += 1
-        return out
 
     # ------------------------------------------------------------
     def _ensure_key_and_csr(self, label: str) -> tuple[Path, Path]:

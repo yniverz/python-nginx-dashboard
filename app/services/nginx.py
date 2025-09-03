@@ -141,11 +141,11 @@ server {{
 
             # ---------- 2. choose cert/key path ----------
             if subdomain in ("@", "") or "." not in subdomain:
-                label_key = ""                    # → _root
+                label_key = ""
             else:
-                label_key = ".".join(subdomain.split(".")[1:])  # drop first label
+                label_key = ".".join(subdomain.split(".")[1:]) + "."
 
-            dir_name = (label_key or "_root") + f".{route.domain.name}"
+            dir_name = f"{label_key}{route.domain.name}"
             crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
             key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
 
