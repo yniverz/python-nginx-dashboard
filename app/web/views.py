@@ -55,16 +55,13 @@ def authenticate(db: Session, username: str, password: str):
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login_form(request: Request, next: str = "/"):
+def login_form(request: Request):
     # If already logged in, bounce to next (or /)
     if request.session.get("user_id"):
-        dest = next if is_safe_path(next) else request.url_for("view_dashboard")
+        dest = request.url_for("view_dashboard")
         return RedirectResponse(dest, status_code=303)
-    safe_next = next if is_safe_path(next) else request.url_for("view_dashboard")
-    return templates.TemplateResponse(
-        "login.jinja2",
-        {"request": request, "next_url": safe_next},
-    )
+
+    return templates.TemplateResponse("login.jinja2", {"request": request})
 
 @router.post("/login")
 def login_submit(
