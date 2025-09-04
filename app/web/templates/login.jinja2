@@ -11,8 +11,6 @@
   <h2>Log in</h2>
 
   <form method="post" action="{{ url_for('login_submit') }}" class="form-box">
-    <input type="hidden" name="next" value="{{ next_url }}" />
-
     <div class="form-group">
       <label for="username">Username or Email</label>
       <input id="username" name="username" type="text" required autocomplete="username" />

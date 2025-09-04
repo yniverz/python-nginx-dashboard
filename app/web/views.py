@@ -70,7 +70,6 @@ def login_submit(
     username: str = Form(...),
     password: str = Form(...),
     remember: bool = Form(False),
-    next: str = Form("/"),
 ):
     user = authenticate(db, username, password)
     if not user:
