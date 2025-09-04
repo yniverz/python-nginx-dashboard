@@ -364,4 +364,26 @@ p { margin: 0.4em 0 0.8em; }
 .mb-0{margin-bottom:0}.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}
 .p-0{padding:0}.p-1{padding:.25rem}.p-2{padding:.5rem}.p-3{padding:.75rem}.p-4{padding:1rem}
 
-/* End of stylesheet */
+
+/* ----------------------------
+   Footer
+   ---------------------------- */
+footer {
+  background: var(--bg-elev);
+  border-top: 1px solid var(--border);
+  margin-top: 36px;
+}
+.footer-container {
+  width: min(92vw, var(--container-max));
+  margin: 0 auto;
+  padding: 14px 2px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.footer-sep { margin: 0 8px; opacity: .6; }
+footer a { color: var(--primary-600); text-decoration: none; }
+footer a:hover { text-decoration: underline; }

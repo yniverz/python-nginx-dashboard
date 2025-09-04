@@ -19,6 +19,7 @@
       <a href="{{ url_for('logout') }}">Logout</a>
     </nav>
   </header>
+
   <main>
     {% if request.state.flash_messages %}
     <br>
@@ -33,5 +34,23 @@
     <br>
     {% block content %}{% endblock %}
   </main>
+
+  <!-- New footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-left">
+        <span>&copy; <span id="year"></span> Multi-Domain Edge Manager.</span>
+        <span class="footer-sep">•</span>
+        <span>Licensed under NCPUL v1.3</span>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/your-org/python-nginx-dashboard" target="_blank" rel="noopener">GitHub project</a>
+      </div>
+    </div>
+  </footer>
+  <script>
+    // keep the year current without server changes
+    (function(){ var el=document.getElementById('year'); if(el){ el.textContent=new Date().getFullYear(); }})();
+  </script>
 </body>
 </html>
