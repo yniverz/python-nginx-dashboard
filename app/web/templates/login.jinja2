@@ -1,24 +1,38 @@
-<h2>Log in</h2>
+<!DOCTYPE html>
+<html lang="en">
 
-<form method="post" action="{{ url_for('login_submit') }}" class="form-box">
-  <input type="hidden" name="next" value="{{ next_url }}"/>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
 
-  <div class="form-group">
-    <label for="username">Username or Email</label>
-    <input id="username" name="username" type="text" required autocomplete="username" />
-  </div>
+<body>
+  <h2>Log in</h2>
 
-  <div class="form-group">
-    <label for="password">Password</label>
-    <input id="password" name="password" type="password" required autocomplete="current-password" />
-  </div>
+  <form method="post" action="{{ url_for('login_submit') }}" class="form-box">
+    <input type="hidden" name="next" value="{{ next_url }}" />
 
-  <div class="form-group checkbox">
-    <label>
-      <input type="checkbox" name="remember" value="1" />
-      Remember me
-    </label>
-  </div>
+    <div class="form-group">
+      <label for="username">Username or Email</label>
+      <input id="username" name="username" type="text" required autocomplete="username" />
+    </div>
 
-  <button type="submit" class="btn btn-primary">Log in</button>
-</form>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required autocomplete="current-password" />
+    </div>
+
+    <div class="form-group checkbox">
+      <label>
+        <input type="checkbox" name="remember" value="1" />
+        Remember me
+      </label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Log in</button>
+  </form>
+</body>
+
+</html>
