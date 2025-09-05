@@ -160,11 +160,14 @@ class DnsRecordRepo:
             # Build archive from the *old* values
             snap = DnsRecord(
                 id=rec.id,
+                domain_id=old_val("domain_id"),
                 name=old_val("name"),
                 type=old_val("type"),
                 content=old_val("content"),
                 ttl=old_val("ttl"),
+                priority=old_val("priority"),
                 proxied=old_val("proxied"),
+                managed_by=old_val("managed_by"),
             )
             archive = DnsRecordArchive.from_dns_record(snap)
             self.db.add(archive)
