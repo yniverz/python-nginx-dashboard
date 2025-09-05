@@ -46,6 +46,7 @@ LISTEN_PORT=8000
 ROOT_PATH=""                       # set if served behind a prefix
 DATA_DIR="data"                    # sqlite lives here unless SQLITE_PATH set
 SQLITE_PATH=""                     # absolute path overrides DATA_DIR/app.db
+SESSION_SECRET="supersecret"       # set to a random string for cookie security
 WEB_USERNAME="admin"
 WEB_PASSWORD="admin"
 
@@ -157,6 +158,7 @@ curl -H "X-Gateway-Token: <SERVER_AUTH_TOKEN>" \
 LISTEN_PORT=8000
 WEB_USERNAME=admin
 WEB_PASSWORD=admin
+SESSION_SECRET=supersecret
 ENABLE_NGINX=false
 ENABLE_CLOUDFLARE=false
 CLOUDFLARE_API_TOKEN=

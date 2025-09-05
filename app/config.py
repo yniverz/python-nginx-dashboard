@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     LISTEN_PORT: int = 8000
     DATA_DIR: str = Field(default="data")
     SQLITE_PATH: str | None = None  # if None, will be data/app.db
-    LOCAL_IP: str = "localhost"
+    SESSION_SECRET: str | None = None  # set to a random string for cookie security
 
     WEB_USERNAME: str = "admin"
     WEB_PASSWORD: str = "admin"
@@ -34,6 +34,7 @@ class Settings(BaseSettings):
 
     CF: cloudflare.Cloudflare | None = None
 
+    LOCAL_IP: str = "localhost"
 
     DEBUG_MODE: bool = True
     ENABLE_NGINX: bool = False  # set True when ready

@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         return response
 
-    app.add_middleware(SessionMiddleware, secret_key="test")
+    app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET or str(uuid4()))
     app.include_router(views.router)
     app.include_router(api.router)
     app.include_router(static.router)
