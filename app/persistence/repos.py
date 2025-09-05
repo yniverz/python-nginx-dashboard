@@ -157,11 +157,6 @@ class DnsRecordRepo:
         self.db.execute(delete(DnsRecord).where(DnsRecord.managed_by==managed_by)); self.db.commit()
 
 
-    # def upsert_user(self, rec: DnsRecord) -> DnsRecord:
-    #     self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
-    # def delete_user(self, id: int) -> None:
-    #     self.db.execute(delete(DnsRecord).where(DnsRecord.id==id, DnsRecord.managed_by==ManagedBy.USER)); self.db.commit()
-
     def list_archived(self) -> list[DnsRecordArchive]:
         return list(self.db.scalars(select(DnsRecordArchive)))
     def delete_archived(self, id: int) -> None:

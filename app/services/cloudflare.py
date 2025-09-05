@@ -153,6 +153,15 @@ class CloudFlareManager:
         returns list of all records on cloudflare now
         """
 
+        # go through archived records and see if they still exist, if yes, delete first.
+        for entry in repos.DnsRecordRepo(self.db).list_archived():
+            print("remove ", entry.name)
+            shared_rec = self._get_shared_record_from_db(entry)
+            if shared_rec in self.cf_cache.remote_entries and entry.managed_by != ManagedBy.IMPORTED:
+                self._delete_cloudflare_record(entry)
+                self.cf_cache.remote_entries.discard(shared_rec)
+            repos.DnsRecordRepo(self.db).delete_archived(entry.id)
+
         self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
 
         repos.DnsRecordRepo(self.db).delete_all_managed_by(ManagedBy.IMPORTED)
@@ -182,15 +191,6 @@ class CloudFlareManager:
                             )
                         )
                     self.cf_cache.remote_entries.add(shared_rec)
-
-        # go through archived records and see if they still exist, if yes, delete first.
-        for entry in repos.DnsRecordRepo(self.db).list_archived():
-            print("remove ", entry.name)
-            shared_rec = self._get_shared_record_from_db(entry)
-            if shared_rec in self.cf_cache.remote_entries and entry.managed_by != ManagedBy.IMPORTED:
-                self._delete_cloudflare_record(entry)
-                self.cf_cache.remote_entries.discard(shared_rec)
-            repos.DnsRecordRepo(self.db).delete_archived(entry.id)
 
         missing_remote = self.cf_cache.local_entries - self.cf_cache.remote_entries
         for entry in missing_remote:
