@@ -135,12 +135,44 @@ class DnsRecordRepo:
             self.db.delete(archive)
 
         self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
+    # def update(self, rec: DnsRecord) -> DnsRecord:
+    #     old = self.get(rec.id)
+    #     if old and (old.name != rec.name or old.type != rec.type or old.content != rec.content or old.ttl != rec.ttl or old.proxied != rec.proxied):
+    #         archive = DnsRecordArchive.from_dns_record(old)
+    #         self.db.add(archive)
+    #     self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
     def update(self, rec: DnsRecord) -> DnsRecord:
-        old = self.get(rec.id)
-        if old and (old.name != rec.name or old.type != rec.type or old.content != rec.content or old.ttl != rec.ttl or old.proxied != rec.proxied):
-            archive = DnsRecordArchive.from_dns_record(old)
+        # 1) Load the persistent instance
+        db_obj = self.db.get(DnsRecord, rec.id)
+        if db_obj is None:
+            raise ValueError(f"DnsRecord {rec.id} not found")
+
+        # 2) Compare BEFORE mutating the persistent object
+        changed = (
+            db_obj.name    != rec.name or
+            db_obj.type    != rec.type or
+            db_obj.content != rec.content or
+            db_obj.ttl     != rec.ttl or
+            db_obj.proxied != rec.proxied
+        )
+
+        # 3) Archive the current persisted state if anything changed
+        if changed:
+            archive = DnsRecordArchive.from_dns_record(db_obj)
             self.db.add(archive)
-        self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
+
+        # 4) Apply incoming values to the managed instance
+        db_obj.name    = rec.name
+        db_obj.type    = rec.type
+        db_obj.content = rec.content
+        db_obj.ttl     = rec.ttl
+        db_obj.proxied = rec.proxied
+
+        # 5) Commit and return the managed instance
+        self.db.commit()
+        self.db.refresh(db_obj)
+        return db_obj
+
     def delete(self, id: int) -> None:
         obj = self.get(id)
         if obj:
