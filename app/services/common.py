@@ -141,6 +141,9 @@ def propagate_changes(db: Session):
 
     subdomains = set()
     for route in repos.NginxRouteRepo(db).list_all():
+        if not route.domain.auto_wildcard:
+            continue
+
         # multilevel if any subdomain exists with more subdomains than this one, so if this one is "a" then it is multilevel if another one with "b.a" exists
         # or if it is "b.a" and one exists with "c.b.a"
         subdomains.add((route.subdomain, route.domain.name))
@@ -178,6 +181,9 @@ def propagate_changes(db: Session):
                 )
 
     for domain in repos.DomainRepo(db).list_all():
+        if not domain.auto_wildcard:
+            continue
+
         for ip in origin_ips:
             # if any subdomain == @ for this domain exists
             if ("@", domain.name) in subdomains:
@@ -204,6 +210,7 @@ def propagate_changes(db: Session):
                         )
                     )
 
+            # if any subdomain that isnt "@" exists for this domain
             if any(s for s in subdomains if s[0] != "@"):
                 exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=domain.id,
