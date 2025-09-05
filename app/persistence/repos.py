@@ -155,6 +155,7 @@ class DnsRecordRepo:
             db_obj.ttl     != rec.ttl or
             db_obj.proxied != rec.proxied
         )
+        print(f"DNS Record {db_obj.id} changed: {changed}")
 
         # 3) Archive the current persisted state if anything changed
         if changed:
