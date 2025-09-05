@@ -137,7 +137,7 @@ class DnsRecordRepo:
         self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
     def update(self, rec: DnsRecord) -> DnsRecord:
         old = self.get(rec.id)
-        if old and (old.name != rec.name or old.type != rec.type or old.content != rec.content):
+        if old and (old.name != rec.name or old.type != rec.type or old.content != rec.content or old.ttl != rec.ttl or old.proxied != rec.proxied):
             archive = DnsRecordArchive.from_dns_record(old)
             self.db.add(archive)
         self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
