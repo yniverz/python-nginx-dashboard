@@ -75,6 +75,8 @@ DEBUG_MODE=true
 
 ### Cloudflare token scopes
 
+> **Important:** If you want to use multiple layers of subdomains (e.g., `a.b.domain.tld`), you must purchase `Advanced Certificate Manager` from Cloudflare found under [SSL/TLS -> Edge Certificates](https://dash.cloudflare.com/?to=/:account/:zone/ssl-tls/edge-certificates). Otherwise, only single-level subdomains (e.g., `a.domain.tld`) will be supported using full to client encryption with valid certificates.
+
 * **Zone.DNS**: Edit
 * **Zone.SSL and Certificates**: Edit
 
