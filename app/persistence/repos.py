@@ -1,5 +1,5 @@
 from typing import Sequence
-from sqlalchemy import and_, select, delete
+from sqlalchemy import and_, inspect, select, delete
 from sqlalchemy.orm import Session
 from app.persistence.models import (
     DnsRecordArchive, Domain, NginxRoute,
@@ -142,37 +142,36 @@ class DnsRecordRepo:
     #         self.db.add(archive)
     #     self.db.add(rec); self.db.commit(); self.db.refresh(rec); return rec
     def update(self, rec: DnsRecord) -> DnsRecord:
-        # 1) Load the persistent instance
-        db_obj = self.db.get(DnsRecord, rec.id)
-        if db_obj is None:
-            raise ValueError(f"DnsRecord {rec.id} not found")
+        insp = inspect(rec)
 
-        # 2) Compare BEFORE mutating the persistent object
-        changed = (
-            db_obj.name    != rec.name or
-            db_obj.type    != rec.type or
-            db_obj.content != rec.content or
-            db_obj.ttl     != rec.ttl or
-            db_obj.proxied != rec.proxied
-        )
-        print(f"DNS Record {db_obj.id} changed: {changed}")
+        # Pull previous values if they changed; fall back to current if not
+        def old_val(attr):
+            h = getattr(insp.attrs, attr).history
+            if h.deleted:    # value before the last assignment
+                return h.deleted[0]
+            if h.unchanged:  # loaded-from-DB value (if never changed)
+                return h.unchanged[0]
+            return None      # wasn't loaded; unlikely for scalar cols
 
-        # 3) Archive the current persisted state if anything changed
+        fields = ["name", "type", "content", "ttl", "proxied"]
+        changed = any(getattr(insp.attrs, f).history.has_changes() for f in fields)
+
         if changed:
-            archive = DnsRecordArchive.from_dns_record(db_obj)
+            # Build archive from the *old* values
+            snap = DnsRecord(
+                id=rec.id,
+                name=old_val("name"),
+                type=old_val("type"),
+                content=old_val("content"),
+                ttl=old_val("ttl"),
+                proxied=old_val("proxied"),
+            )
+            archive = DnsRecordArchive.from_dns_record(snap)
             self.db.add(archive)
 
-        # 4) Apply incoming values to the managed instance
-        db_obj.name    = rec.name
-        db_obj.type    = rec.type
-        db_obj.content = rec.content
-        db_obj.ttl     = rec.ttl
-        db_obj.proxied = rec.proxied
-
-        # 5) Commit and return the managed instance
         self.db.commit()
-        self.db.refresh(db_obj)
-        return db_obj
+        self.db.refresh(rec)
+        return rec
 
     def delete(self, id: int) -> None:
         obj = self.get(id)
