@@ -131,6 +131,7 @@ class CloudFlareDnsCache:
 
     remote_entries: set[SharedRecordType] = field(default_factory=set)
     local_entries: set[SharedRecordType] = field(default_factory=set)
+    local_archived: set[SharedRecordType] = field(default_factory=set)
 
     def __post_init__(self, db: requests.Session, cf: cloudflare.Cloudflare):
         self.zones = cf.zones.list()
@@ -153,6 +154,45 @@ class CloudFlareManager:
         returns list of all records on cloudflare now
         """
 
+
+        self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
+        self.cf_cache.local_archived.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_archived() if e.managed_by != ManagedBy.IMPORTED])
+
+
+        repos.DnsRecordRepo(self.db).delete_all_managed_by(ManagedBy.IMPORTED)
+        for domain in self.cf_cache.domains:
+            zone = self._get_zone(domain.name)
+            if not zone:
+                continue
+
+            entries = self.cf.dns.records.list(zone_id=zone.id)
+            self.cf_cache.entries_by_zone[zone.id] = entries
+            for entry in entries:
+                shared_rec = self._get_shared_record_from_cf(domain.name, entry)
+
+                existing_local = next((e for e in self.cf_cache.local_entries if e == shared_rec), 
+                                      next((e for e in self.cf_cache.local_archived if e == shared_rec), None))
+                if existing_local:
+                    shared_rec = replace(shared_rec, managed_by=existing_local.managed_by)
+                else:
+                    repos.DnsRecordRepo(self.db).create(
+                        DnsRecord(
+                            domain_id=domain.id,
+                            name=entry.name[: -len(domain.name)-1] if entry.name.endswith(f".{domain.name}") else "@",
+                            type=entry.type,
+                            content=entry.content,
+                            ttl=entry.ttl,
+                            priority=entry.priority if hasattr(entry, 'priority') else None,
+                            proxied=entry.proxied,
+                            managed_by=ManagedBy.IMPORTED,
+                            meta=entry.meta,
+                        )
+                    )
+                self.cf_cache.remote_entries.add(shared_rec)
+
+
+
+
         # go through archived records and see if they still exist, if yes, delete first.
         for entry in repos.DnsRecordRepo(self.db).list_archived():
             print("remove ", entry.name)
@@ -162,35 +202,8 @@ class CloudFlareManager:
                 self.cf_cache.remote_entries.discard(shared_rec)
             repos.DnsRecordRepo(self.db).delete_archived(entry.id)
 
-        self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
 
-        repos.DnsRecordRepo(self.db).delete_all_managed_by(ManagedBy.IMPORTED)
-        for domain in self.cf_cache.domains:
-            zone = self._get_zone(domain.name)
-            if zone:
-                entries = self.cf.dns.records.list(zone_id=zone.id)
-                self.cf_cache.entries_by_zone[zone.id] = entries
-                for entry in entries:
-                    shared_rec = self._get_shared_record_from_cf(domain.name, entry)
 
-                    existing_local = next((e for e in self.cf_cache.local_entries if e == shared_rec), None)
-                    if existing_local:
-                        shared_rec = replace(shared_rec, managed_by=existing_local.managed_by)
-                    else:
-                        repos.DnsRecordRepo(self.db).create(
-                            DnsRecord(
-                                domain_id=domain.id,
-                                name=entry.name[: -len(domain.name)-1] if entry.name.endswith(f".{domain.name}") else "@",
-                                type=entry.type,
-                                content=entry.content,
-                                ttl=entry.ttl,
-                                priority=entry.priority if hasattr(entry, 'priority') else None,
-                                proxied=entry.proxied,
-                                managed_by=ManagedBy.IMPORTED,
-                                meta=entry.meta,
-                            )
-                        )
-                    self.cf_cache.remote_entries.add(shared_rec)
 
         missing_remote = self.cf_cache.local_entries - self.cf_cache.remote_entries
         for entry in missing_remote:
