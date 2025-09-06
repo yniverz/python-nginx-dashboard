@@ -365,7 +365,7 @@ table td:nth-child(3) {
 table th:nth-child(4), /* Content - most likely to be long */
 table td:nth-child(4) { 
   width: 25%; 
-  max-width: 200px; 
+  max-width: 400px; 
   min-width: 120px;
 }
 
