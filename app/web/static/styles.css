@@ -303,7 +303,6 @@ table {
   overflow: hidden; /* enables rounded corners */
   background: var(--bg-elev);
   box-shadow: var(--shadow-sm);
-  table-layout: fixed; /* Force table to respect column widths */
 }
 
 thead th {
@@ -334,74 +333,6 @@ tbody tr:hover { background: var(--primary-soft); }
   table { display: block; overflow-x: auto; white-space: nowrap; }
 }
 
-/* Table cell text wrapping and width constraints */
-tbody td {
-  word-wrap: break-word;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  max-width: 0; /* Allows table to respect max-width on columns */
-}
-
-
-/* Specific column width constraints for DNS table */
-table th:nth-child(1), /* Name */
-table td:nth-child(1) { 
-  width: 15%; 
-  max-width: 120px; 
-}
-
-table th:nth-child(2), /* Domain */
-table td:nth-child(2) { 
-  width: 12%; 
-  max-width: 100px; 
-}
-
-table th:nth-child(3), /* Type */
-table td:nth-child(3) { 
-  width: 8%; 
-  max-width: 80px; 
-}
-
-table th:nth-child(4), /* Content - most likely to be long */
-table td:nth-child(4) { 
-  width: 25%; 
-  max-width: 200px; 
-  min-width: 120px;
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  hyphens: auto;
-}
-
-table th:nth-child(5), /* TTL */
-table td:nth-child(5) { 
-  width: 6%; 
-  max-width: 60px; 
-}
-
-table th:nth-child(6), /* Priority */
-table td:nth-child(6) { 
-  width: 8%; 
-  max-width: 70px; 
-}
-
-table th:nth-child(7), /* Proxied */
-table td:nth-child(7) { 
-  width: 8%; 
-  max-width: 80px; 
-}
-
-table th:nth-child(8), /* Managed By */
-table td:nth-child(8) { 
-  width: 10%; 
-  max-width: 100px; 
-}
-
-table th:nth-child(9), /* Actions */
-table td:nth-child(9) { 
-  width: 8%; 
-  max-width: 80px; 
-}
-
 /* ----------------------------
    Cards (optional utility)
    ---------------------------- */
@@ -425,6 +356,30 @@ pre, code, .mono {
 
 h1, h2, h3 { line-height: 1.2; margin: 0.25em 0 0.35em; }
 p { margin: 0.4em 0 0.8em; }
+
+/* ----------------------------
+   Text truncation utilities
+   ---------------------------- */
+.text-truncate {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.text-truncate:hover {
+  overflow: visible;
+  white-space: normal;
+  word-break: break-all;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  position: relative;
+  z-index: 10;
+  box-shadow: var(--shadow-md);
+}
 
 /* ----------------------------
    Spacing utilities
