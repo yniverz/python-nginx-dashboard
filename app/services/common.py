@@ -43,34 +43,54 @@ def background_publish():
     """
     global JOB_RUNNING, JOB_RESULT, UNSYNCED_CHANGES
 
+    print("[background_publish] Starting background publish job...")
+    
     if JOB_RUNNING:
+        print("[background_publish] Job already running, skipping")
         return
 
+    print("[background_publish] Setting job status to running")
     JOB_RUNNING = True
     UNSYNCED_CHANGES = False
+    
     try:
+        print("[background_publish] Opening database session")
         with DBSession() as db:
             # Generate nginx configuration
+            print(f"[background_publish] Generating nginx configuration (dry_run: {not settings.ENABLE_NGINX})")
             NginxConfigGenerator(db, dry_run=not settings.ENABLE_NGINX)
+            print("[background_publish] Nginx configuration generated successfully")
 
             # Sync DNS records with Cloudflare
+            print(f"[background_publish] Syncing DNS records with Cloudflare (dry_run: {not settings.ENABLE_CLOUDFLARE})")
             cf_dns = CloudFlareManager(db, dry_run=not settings.ENABLE_CLOUDFLARE)
             cache = cf_dns.sync()
+            print("[background_publish] DNS records synced successfully")
 
             # Manage SSL certificates
+            print(f"[background_publish] Managing SSL certificates (dry_run: {not settings.ENABLE_CLOUDFLARE})")
             cf_ca = CloudFlareOriginCAManager(db, cache, dry_run=not settings.ENABLE_CLOUDFLARE)
             cf_ca.sync()
+            print("[background_publish] SSL certificates managed successfully")
 
         # Reload nginx configuration if enabled
         if settings.ENABLE_NGINX:
+            print(f"[background_publish] Reloading nginx with command: {settings.NGINX_RELOAD_CMD}")
             subprocess.run(settings.NGINX_RELOAD_CMD.split(" "), check=True)
+            print("[background_publish] Nginx reloaded successfully")
+        else:
+            print("[background_publish] Nginx reload disabled, skipping")
+            
         JOB_RESULT = "Publish job completed successfully."
+        print("[background_publish] Job completed successfully")
 
     except Exception as e:
         JOB_RESULT = f"Publish job failed: {str(e)}"
+        print(f"[background_publish] Job failed with error: {str(e)}")
         traceback.print_exc()
 
     finally:
+        print("[background_publish] Setting job status to not running")
         JOB_RUNNING = False
 
 
@@ -81,17 +101,25 @@ def propagate_changes(db: Session):
     Creates system-managed DNS records and gateway connections for origin servers.
     """
     global UNSYNCED_CHANGES
+    
+    print("[propagate_changes] Starting change propagation...")
     UNSYNCED_CHANGES = True
 
     origin_ips = []
 
     # Clear all system-managed records to rebuild them
+    print("[propagate_changes] Clearing existing system-managed records...")
     repos.GatewayConnectionRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
     repos.DnsRecordRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
+    print("[propagate_changes] System-managed records cleared")
 
     # Process all gateway clients
-    for client in repos.GatewayClientRepo(db).list_all():
+    clients = repos.GatewayClientRepo(db).list_all()
+    print(f"[propagate_changes] Processing {len(clients)} gateway clients...")
+    
+    for client in clients:
         if client.is_origin:
+            print(f"[propagate_changes] Processing origin client: {client.server.name} ({client.server.host})")
             # Create gateway connections for HTTP and HTTPS on origin servers
             conn_name = f"origin_{client.server.name}_80"
             repos.GatewayConnectionRepo(db).create(
@@ -106,6 +134,7 @@ def propagate_changes(db: Session):
                 )
             )
             conn_name = f"origin_{client.server.name}_443"
+            print(f"[propagate_changes] Creating HTTPS gateway connection: {conn_name}")
             repos.GatewayConnectionRepo(db).create(
                 GatewayConnection(
                     name=conn_name,
@@ -120,9 +149,14 @@ def propagate_changes(db: Session):
 
             # Create direct DNS records for domains that support direct prefix
             origin_ip = client.server.host
+            print(f"[propagate_changes] Creating direct DNS records for origin IP: {origin_ip}")
 
-            for domain in repos.DomainRepo(db).list_all():
+            domains = repos.DomainRepo(db).list_all()
+            print(f"[propagate_changes] Processing {len(domains)} domains for direct prefix records...")
+            
+            for domain in domains:
                 if domain.use_for_direct_prefix:
+                    print(f"[propagate_changes] Creating direct DNS record for domain: {domain.name}")
                     # Create or update direct subdomain DNS record
                     exists_id = repos.DnsRecordRepo(db).exists(
                         domain_id=domain.id,
@@ -130,6 +164,7 @@ def propagate_changes(db: Session):
                         type="A",
                     )
                     if exists_id:
+                        print(f"[propagate_changes] Updating existing direct DNS record: {client.server.name}.direct.{domain.name}")
                         rec = repos.DnsRecordRepo(db).get(exists_id)
                         rec.content = origin_ip
                         rec.proxied = False
@@ -137,6 +172,7 @@ def propagate_changes(db: Session):
                         repos.DnsRecordRepo(db).update(rec)
                         continue
 
+                    print(f"[propagate_changes] Creating new direct DNS record: {client.server.name}.direct.{domain.name}")
                     repos.DnsRecordRepo(db).create(
                         DnsRecord(
                             domain_id=domain.id,
@@ -149,26 +185,37 @@ def propagate_changes(db: Session):
                     )
 
             origin_ips.append(origin_ip)
+            print(f"[propagate_changes] Added origin IP {origin_ip} to list (total: {len(origin_ips)})")
 
     # Create wildcard DNS records for multi-level subdomains
+    print("[propagate_changes] Creating wildcard DNS records for multi-level subdomains...")
     subdomains = set()
-    for route in repos.NginxRouteRepo(db).list_all():
+    routes = repos.NginxRouteRepo(db).list_all()
+    print(f"[propagate_changes] Processing {len(routes)} nginx routes for wildcard records...")
+    
+    for route in routes:
         if not route.domain.auto_wildcard:
             continue
 
         # Track all subdomains for later wildcard generation
         subdomains.add((route.subdomain, route.domain.name))
+        print(f"[propagate_changes] Tracking subdomain: {route.subdomain}.{route.domain.name}")
 
         # Check if this is a multi-level subdomain (has child subdomains)
         is_multilevel = route.subdomain.count(".") > 0
+        print(f"[propagate_changes] Checking if {route.subdomain}.{route.domain.name} is multi-level (dots: {route.subdomain.count('.')})")
+        
         for other_route in repos.NginxRouteRepo(db).list_by_domain(route.domain_id):
             if other_route.subdomain != route.subdomain and other_route.subdomain.endswith(f".{route.subdomain}") and route.domain.use_for_direct_prefix:
                 is_multilevel = True
+                print(f"[propagate_changes] Found child subdomain {other_route.subdomain}, marking as multi-level")
                 break
 
         if is_multilevel:
             # Create wildcard DNS record for the parent domain
             without_last = ".".join(route.subdomain.split(".")[1:])
+            print(f"[propagate_changes] Creating wildcard DNS record for multi-level subdomain: *.{without_last}.{route.domain.name}")
+            
             for ip in origin_ips:
                 exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=route.domain.id,
@@ -177,11 +224,13 @@ def propagate_changes(db: Session):
                     content=ip
                 )
                 if exists_id:
+                    print(f"[propagate_changes] Updating existing wildcard DNS record: *.{without_last}.{route.domain.name} -> {ip}")
                     rec = repos.DnsRecordRepo(db).get(exists_id)
                     rec.proxied = True
                     rec.managed_by = ManagedBy.SYSTEM
                     repos.DnsRecordRepo(db).update(rec)
                     continue
+                print(f"[propagate_changes] Creating new wildcard DNS record: *.{without_last}.{route.domain.name} -> {ip}")
                 repos.DnsRecordRepo(db).create(
                     DnsRecord(
                         domain_id=route.domain.id,
@@ -194,13 +243,18 @@ def propagate_changes(db: Session):
                 )
 
     # Create root and wildcard DNS records for domains with auto-wildcard enabled
+    print("[propagate_changes] Creating root and wildcard DNS records for auto-wildcard domains...")
+    
     for domain in repos.DomainRepo(db).list_all():
         if not domain.auto_wildcard:
             continue
 
+        print(f"[propagate_changes] Processing auto-wildcard domain: {domain.name}")
+        
         for ip in origin_ips:
             # Create root domain DNS record if there's a root route
             if ("@", domain.name) in subdomains:
+                print(f"[propagate_changes] Creating root DNS record for domain: {domain.name} -> {ip}")
                 exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=domain.id,
                     name=f"@",
@@ -208,11 +262,13 @@ def propagate_changes(db: Session):
                     content=ip
                 )
                 if exists_id:
+                    print(f"[propagate_changes] Updating existing root DNS record: {domain.name} -> {ip}")
                     rec = repos.DnsRecordRepo(db).get(exists_id)
                     rec.proxied = True
                     rec.managed_by = ManagedBy.SYSTEM
                     repos.DnsRecordRepo(db).update(rec)
                 else:
+                    print(f"[propagate_changes] Creating new root DNS record: {domain.name} -> {ip}")
                     repos.DnsRecordRepo(db).create(
                         DnsRecord(
                             domain_id=domain.id,
@@ -226,6 +282,7 @@ def propagate_changes(db: Session):
 
             # Create wildcard DNS record if there are any non-root subdomains
             if any(s for s in subdomains if s[0] != "@"):
+                print(f"[propagate_changes] Creating wildcard DNS record for domain: *.{domain.name} -> {ip}")
                 exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=domain.id,
                     name=f"*",
@@ -233,12 +290,14 @@ def propagate_changes(db: Session):
                     content=ip
                 )
                 if exists_id:
+                    print(f"[propagate_changes] Updating existing wildcard DNS record: *.{domain.name} -> {ip}")
                     rec = repos.DnsRecordRepo(db).get(exists_id)
                     rec.proxied = True
                     rec.managed_by = ManagedBy.SYSTEM
                     repos.DnsRecordRepo(db).update(rec)
                     continue
                 
+                print(f"[propagate_changes] Creating new wildcard DNS record: *.{domain.name} -> {ip}")
                 repos.DnsRecordRepo(db).create(
                     DnsRecord(
                         domain_id=domain.id,
