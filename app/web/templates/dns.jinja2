@@ -1,6 +1,96 @@
 {% extends "_layout.jinja2" %}
 
 {% block content %}
+<style>
+/* DNS table specific styling */
+.dns-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.dns-table th:nth-child(1), /* Name */
+.dns-table td:nth-child(1) { 
+  width: 15%; 
+  max-width: 120px; 
+}
+
+.dns-table th:nth-child(2), /* Domain */
+.dns-table td:nth-child(2) { 
+  width: 12%; 
+  max-width: 100px; 
+}
+
+.dns-table th:nth-child(3), /* Type */
+.dns-table td:nth-child(3) { 
+  width: 8%; 
+  max-width: 80px; 
+}
+
+.dns-table th:nth-child(4), /* Content - most likely to be long */
+.dns-table td:nth-child(4) { 
+  width: 25%; 
+  max-width: 400px; 
+  min-width: 120px;
+  position: relative;
+}
+
+.dns-table th:nth-child(5), /* TTL */
+.dns-table td:nth-child(5) { 
+  width: 6%; 
+  max-width: 60px; 
+}
+
+.dns-table th:nth-child(6), /* Priority */
+.dns-table td:nth-child(6) { 
+  width: 8%; 
+  max-width: 70px; 
+}
+
+.dns-table th:nth-child(7), /* Proxied */
+.dns-table td:nth-child(7) { 
+  width: 8%; 
+  max-width: 80px; 
+}
+
+.dns-table th:nth-child(8), /* Managed By */
+.dns-table td:nth-child(8) { 
+  width: 10%; 
+  max-width: 100px; 
+}
+
+.dns-table th:nth-child(9), /* Actions */
+.dns-table td:nth-child(9) { 
+  width: 8%; 
+  max-width: 80px; 
+}
+
+/* DNS table content cell hover expansion */
+.dns-table td:nth-child(4) .text-truncate {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+  display: block;
+}
+
+.dns-table td:nth-child(4):hover .text-truncate {
+  overflow: visible;
+  white-space: normal;
+  word-break: break-all;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  position: absolute;
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
+  max-width: 400px;
+  min-width: 200px;
+  left: 0;
+  top: 0;
+}
+</style>
 <h1>DNS</h1>
 
     {{ unsynced_changes }}
@@ -35,7 +125,7 @@
 </form>
 <br>
 
-<table>
+<table class="dns-table">
     <thead>
         <tr>
             <th>Name</th>
