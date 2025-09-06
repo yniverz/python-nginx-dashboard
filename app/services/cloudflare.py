@@ -246,12 +246,6 @@ class CloudFlareManager:
             self._create_cloudflare_record(db_record)
             self.cf_cache.remote_entries.add(entry)
 
-        # for e in self.local_entries:
-        #     print(e.name, e.type, e.content, e.managed_by)
-        # print("---")
-        # for e in self.remote_entries:
-        #     print(e.name, e.type, e.content, e.managed_by)
-
         return self.cf_cache
 
     def _delete_cloudflare_record(self, record: DnsRecord) -> None:
