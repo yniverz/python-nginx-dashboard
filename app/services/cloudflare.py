@@ -1,3 +1,7 @@
+"""
+Cloudflare DNS and SSL certificate management service.
+Handles DNS record synchronization, IP range caching, and Origin CA certificate management.
+"""
 from dataclasses import InitVar, dataclass, field, replace
 import ipaddress
 import json
@@ -26,16 +30,20 @@ from app.persistence.models import DnsRecord, Domain, ManagedBy
 
 
 
+# Cloudflare IP range URLs for real IP detection
 CF_IPV4_URL = "https://www.cloudflare.com/ips-v4"
 CF_IPV6_URL = "https://www.cloudflare.com/ips-v6"
 
-# Reasonable default refresh period. CF ranges rarely change, but we do not want stale data.
-DEFAULT_CF_IP_TTL = 24 * 3600  # 1 day
+# Default cache TTL for Cloudflare IP ranges (1 day)
+DEFAULT_CF_IP_TTL = 24 * 3600
 
 
 @dataclass
 class CloudflareIPCache:
-    """In-memory + optional on-disk cache wrapper for Cloudflare IP ranges."""
+    """
+    Caches Cloudflare IP ranges for nginx real IP configuration.
+    Supports both in-memory and on-disk caching with TTL expiration.
+    """
     cache_path: Optional[str] = None
     ttl_seconds: int = DEFAULT_CF_IP_TTL
     _ipv4: list[str] = field(default_factory=list, init=False, repr=False)
@@ -43,9 +51,16 @@ class CloudflareIPCache:
     _fetched_at: float = field(default=0.0, init=False, repr=False)
 
     def get(self, force_refresh: bool = False) -> tuple[list[str], list[str]]:
+        """
+        Get Cloudflare IP ranges with caching.
+        Returns cached data if available and not expired, otherwise fetches fresh data.
+        """
         now = time.time()
+        # Return in-memory cache if valid
         if not force_refresh and self._ipv4 and self._ipv6 and (now - self._fetched_at) < self.ttl_seconds:
             return self._ipv4, self._ipv6
+        
+        # Try to load from disk cache if available
         if not force_refresh and self.cache_path:
             try:
                 with open(self.cache_path, "r", encoding="utf-8") as f:
@@ -55,13 +70,15 @@ class CloudflareIPCache:
                     self._ipv6 = list(data.get("ipv6", []))
                     self._fetched_at = data["fetched_at"]
                     return self._ipv4, self._ipv6
-            except Exception:  # noqa: BLE001 - best-effort
+            except Exception:  # noqa: BLE001 - best-effort cache loading
                 pass
 
-        # Need fresh fetch
+        # Fetch fresh data from Cloudflare
         ipv4, ipv6 = self._fetch_from_cf()
         self._ipv4, self._ipv6 = ipv4, ipv6
         self._fetched_at = now
+        
+        # Persist to disk cache if configured
         if self.cache_path:
             tmp = f"{self.cache_path}.tmp"
             try:
@@ -73,6 +90,7 @@ class CloudflareIPCache:
         return ipv4, ipv6
 
     def _fetch_from_cf(self) -> tuple[list[str], list[str]]:
+        """Fetch IP ranges from Cloudflare's official endpoints."""
         ipv4 = _fetch_cidr_list(CF_IPV4_URL)
         ipv6 = _fetch_cidr_list(CF_IPV6_URL)
         if not ipv4 and not ipv6:
@@ -80,8 +98,8 @@ class CloudflareIPCache:
         return ipv4, ipv6
 
 def _fetch_cidr_list(url: str) -> list[str]:
-    """Fetch newline-delimited CIDRs from *url* and validate them.
-
+    """
+    Fetch and validate CIDR blocks from Cloudflare's IP range endpoints.
     Returns only syntactically valid CIDRs; invalid lines are skipped with a warning.
     """
     try:
@@ -90,13 +108,14 @@ def _fetch_cidr_list(url: str) -> list[str]:
     except Exception as e:  # noqa: BLE001
         print(f"Fetch failed for {url}: {e}")
         return []
+    
     cidrs: list[str] = []
     for line in resp.text.splitlines():
         line = line.strip()
         if not line:
             continue
         try:
-            # Validate; strict=False allows host addresses though CF publishes CIDRs.
+            # Validate CIDR format (strict=False allows host addresses)
             ipaddress.ip_network(line, strict=False)
         except ValueError:
             print(f"Skipping invalid CIDR {line!r} from {url}")
@@ -106,12 +125,14 @@ def _fetch_cidr_list(url: str) -> list[str]:
 
 
 
+# Global IP cache instance
 cloudflare_ip_cache = CloudflareIPCache()
 cloudflare_ip_cache.get()
 
 
 @dataclass(frozen=True)
 class SharedRecordType:
+    """Immutable representation of a DNS record for comparison and caching."""
     domain: str
     name: str
     type: str
@@ -122,6 +143,7 @@ class SharedRecordType:
 
 @dataclass
 class CloudFlareDnsCache:
+    """Cache for Cloudflare DNS data during synchronization."""
     db: InitVar[requests.Session]
     cf: InitVar[cloudflare.Cloudflare]
 
@@ -134,12 +156,16 @@ class CloudFlareDnsCache:
     local_archived: set[SharedRecordType] = field(default_factory=set)
 
     def __post_init__(self, db: requests.Session, cf: cloudflare.Cloudflare):
+        """Initialize cache with Cloudflare zones and local domains."""
         self.zones = cf.zones.list()
         self.domains = repos.DomainRepo(db).list_all()
 
 
 class CloudFlareManager:
-    """Manage Cloudflare DNS records."""
+    """
+    Manages DNS record synchronization between local database and Cloudflare.
+    Handles importing existing records and creating missing ones.
+    """
 
     def __init__(self, db: requests.Session, dry_run: bool = False):
         self.db = db
@@ -149,17 +175,19 @@ class CloudFlareManager:
 
     def sync(self) -> CloudFlareDnsCache:
         """
-        Run the CloudFlare manager.
-
-        returns list of all records on cloudflare now
+        Synchronize DNS records between local database and Cloudflare.
+        - Imports existing Cloudflare records as IMPORTED
+        - Creates missing local records on Cloudflare
+        - Removes archived records from Cloudflare
         """
-
-
+        # Load local records (excluding previously imported ones)
         self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
         self.cf_cache.local_archived.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_archived() if e.managed_by != ManagedBy.IMPORTED])
 
-
+        # Clear previously imported records to re-import fresh
         repos.DnsRecordRepo(self.db).delete_all_managed_by(ManagedBy.IMPORTED)
+        
+        # Import all existing Cloudflare records
         for domain in self.cf_cache.domains:
             zone = self._get_zone(domain.name)
             if not zone:
@@ -170,11 +198,14 @@ class CloudFlareManager:
             for entry in entries:
                 shared_rec = self._get_shared_record_from_cf(domain.name, entry)
 
+                # Check if this record already exists locally (user or system managed)
                 existing_local = next((e for e in self.cf_cache.local_entries if e == shared_rec), 
                                       next((e for e in self.cf_cache.local_archived if e == shared_rec), None))
                 if existing_local:
+                    # Preserve the existing management type
                     shared_rec = replace(shared_rec, managed_by=existing_local.managed_by)
                 else:
+                    # Import as new record
                     repos.DnsRecordRepo(self.db).create(
                         DnsRecord(
                             domain_id=domain.id,

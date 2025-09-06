@@ -1,7 +1,9 @@
 
 
-
-
+"""
+Common service functions for background job management and configuration propagation.
+Handles the synchronization of DNS records, SSL certificates, and nginx configuration.
+"""
 import subprocess
 import traceback
 from requests import Session
@@ -12,13 +14,16 @@ from app.persistence.models import DnsRecord, GatewayConnection, GatewayProtocol
 from app.services.cloudflare import CloudFlareManager, CloudFlareOriginCAManager
 from app.services.nginx import NginxConfigGenerator
 
-
-
+# Global state for background job management
 JOB_RUNNING = False
 JOB_RESULT = None
 UNSYNCED_CHANGES = False
 
 def get_job_result():
+    """
+    Get the result of the last background job.
+    Returns None if job is still running or no result available.
+    """
     global JOB_RESULT
 
     if JOB_RUNNING:
@@ -29,6 +34,13 @@ def get_job_result():
     return r
 
 def background_publish():
+    """
+    Run the background publish job that synchronizes all configurations.
+    - Generates nginx configuration
+    - Syncs DNS records with Cloudflare
+    - Manages SSL certificates
+    - Reloads nginx if enabled
+    """
     global JOB_RUNNING, JOB_RESULT, UNSYNCED_CHANGES
 
     if JOB_RUNNING:
@@ -38,14 +50,18 @@ def background_publish():
     UNSYNCED_CHANGES = False
     try:
         with DBSession() as db:
+            # Generate nginx configuration
             NginxConfigGenerator(db, dry_run=not settings.ENABLE_NGINX)
 
+            # Sync DNS records with Cloudflare
             cf_dns = CloudFlareManager(db, dry_run=not settings.ENABLE_CLOUDFLARE)
             cache = cf_dns.sync()
 
+            # Manage SSL certificates
             cf_ca = CloudFlareOriginCAManager(db, cache, dry_run=not settings.ENABLE_CLOUDFLARE)
             cf_ca.sync()
 
+        # Reload nginx configuration if enabled
         if settings.ENABLE_NGINX:
             subprocess.run(settings.NGINX_RELOAD_CMD.split(" "), check=True)
         JOB_RESULT = "Publish job completed successfully."
@@ -60,22 +76,23 @@ def background_publish():
 
 
 def propagate_changes(db: Session):
+    """
+    Automatically propagate changes based on gateway client configurations.
+    Creates system-managed DNS records and gateway connections for origin servers.
+    """
     global UNSYNCED_CHANGES
     UNSYNCED_CHANGES = True
 
-    # Propagator:
-    # For every proxy client
-    # - Is origin?
-    #     - Create proxy connection to 80 and 443
-
-
     origin_ips = []
 
+    # Clear all system-managed records to rebuild them
     repos.GatewayConnectionRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
     repos.DnsRecordRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
 
+    # Process all gateway clients
     for client in repos.GatewayClientRepo(db).list_all():
         if client.is_origin:
+            # Create gateway connections for HTTP and HTTPS on origin servers
             conn_name = f"origin_{client.server.name}_80"
             repos.GatewayConnectionRepo(db).create(
                 GatewayConnection(
@@ -101,14 +118,12 @@ def propagate_changes(db: Session):
                 )
             )
 
-            # For every domain
-            # - Use for direct?
-            #     - Ensure dns entry proxy_server_name.direct.domain managed by SYSTEM, proxy off
-
+            # Create direct DNS records for domains that support direct prefix
             origin_ip = client.server.host
 
             for domain in repos.DomainRepo(db).list_all():
                 if domain.use_for_direct_prefix:
+                    # Create or update direct subdomain DNS record
                     exists_id = repos.DnsRecordRepo(db).exists(
                         domain_id=domain.id,
                         name=f"{client.server.name}.direct",
@@ -135,19 +150,16 @@ def propagate_changes(db: Session):
 
             origin_ips.append(origin_ip)
 
-    # For every route (@ is root)
-    # - Is multilevel subdomain?
-    #     - Ensure dns records for each origin ip Managed by SYSTEM, proxy on
-
+    # Create wildcard DNS records for multi-level subdomains
     subdomains = set()
     for route in repos.NginxRouteRepo(db).list_all():
         if not route.domain.auto_wildcard:
             continue
 
-        # multilevel if any subdomain exists with more subdomains than this one, so if this one is "a" then it is multilevel if another one with "b.a" exists
-        # or if it is "b.a" and one exists with "c.b.a"
+        # Track all subdomains for later wildcard generation
         subdomains.add((route.subdomain, route.domain.name))
 
+        # Check if this is a multi-level subdomain (has child subdomains)
         is_multilevel = route.subdomain.count(".") > 0
         for other_route in repos.NginxRouteRepo(db).list_by_domain(route.domain_id):
             if other_route.subdomain != route.subdomain and other_route.subdomain.endswith(f".{route.subdomain}") and route.domain.use_for_direct_prefix:
@@ -155,6 +167,7 @@ def propagate_changes(db: Session):
                 break
 
         if is_multilevel:
+            # Create wildcard DNS record for the parent domain
             without_last = ".".join(route.subdomain.split(".")[1:])
             for ip in origin_ips:
                 exists_id = repos.DnsRecordRepo(db).exists(
@@ -180,12 +193,13 @@ def propagate_changes(db: Session):
                     )
                 )
 
+    # Create root and wildcard DNS records for domains with auto-wildcard enabled
     for domain in repos.DomainRepo(db).list_all():
         if not domain.auto_wildcard:
             continue
 
         for ip in origin_ips:
-            # if any subdomain == @ for this domain exists
+            # Create root domain DNS record if there's a root route
             if ("@", domain.name) in subdomains:
                 exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=domain.id,
@@ -210,7 +224,7 @@ def propagate_changes(db: Session):
                         )
                     )
 
-            # if any subdomain that isnt "@" exists for this domain
+            # Create wildcard DNS record if there are any non-root subdomains
             if any(s for s in subdomains if s[0] != "@"):
                 exists_id = repos.DnsRecordRepo(db).exists(
                     domain_id=domain.id,

@@ -1,3 +1,7 @@
+"""
+Nginx configuration generation service.
+Generates nginx configuration files for HTTP/HTTPS proxying and load balancing.
+"""
 from requests import Session
 from app.persistence import repos
 from app.persistence.models import NginxRoute, NginxRouteHost, NginxRouteProtocol
@@ -5,28 +9,36 @@ from app.services.cloudflare import cloudflare_ip_cache
 from app.config import settings
 
 
-
-
 class NginxConfigGenerator:
+    """
+    Generates nginx configuration files from database route definitions.
+    Creates HTTP/HTTPS server blocks with upstream load balancing.
+    """
     def __init__(self, db: Session, dry_run: bool = False):
         self.db = db
         self.dry_run = dry_run
         self.generate_config()
 
     def generate_config(self):
+        """Generate all nginx configuration files."""
         self.global_upstream_counter = 0
         self._generate_http_config()
+        # Stream configuration generation is currently disabled
         # self._generate_stream_config()
 
 
 
 
     def _get_upstream_name(self):
+        """Generate a unique upstream name for load balancing."""
         self.global_upstream_counter += 1
         return f"upstream_{self.global_upstream_counter}"
 
-
     def _get_upstream(self, upstream_name: str, targets: list[NginxRouteHost]):
+        """
+        Generate nginx upstream block for load balancing.
+        Includes health check and backup server configuration.
+        """
         upstream_blocks = f"upstream {upstream_name} " + "{\n"
         for target in targets:
             if not target.active:
@@ -44,8 +56,11 @@ class NginxConfigGenerator:
         upstream_blocks += "}\n"
         return upstream_blocks
 
-
     def _get_cf_ip_ranges(self):
+        """
+        Generate nginx configuration for Cloudflare IP ranges.
+        Enables real IP detection from Cloudflare's proxy headers.
+        """
         ipv4, ipv6 = cloudflare_ip_cache.get()
 
         ip_block = ""
@@ -100,8 +115,13 @@ class NginxConfigGenerator:
 
 
     def _generate_http_config(self):
+        """
+        Generate the main HTTP configuration file.
+        Creates HTTP to HTTPS redirects and HTTPS server blocks with SSL.
+        """
         domains = repos.DomainRepo(self.db).list_all()
 
+        # Start with global configuration
         config = f"""
 map $http_upgrade $connection_upgrade {{
     default upgrade;
@@ -111,6 +131,7 @@ map $http_upgrade $connection_upgrade {{
 {self._get_cf_ip_ranges()}
 
 """
+        # Generate HTTP to HTTPS redirects for all domains
         for domain in domains:
             routes = repos.NginxRouteRepo(self.db).list_by_domain(domain.id)
             if not any(r.active for r in routes):
@@ -124,18 +145,24 @@ server {{
 }}
 """
             
+        # Generate HTTPS server blocks with SSL and proxying
         config += self._generate_http_subdomain_blocks()
 
+        # Write configuration to file unless in dry run mode
         if not self.dry_run:
             with open(settings.NGINX_HTTP_CONF_PATH, 'w') as http_config_file:
                 http_config_file.write(config)
 
     def _generate_http_subdomain_blocks(self):   
+        """
+        Generate HTTPS server blocks for each subdomain with SSL certificates.
+        Groups routes by subdomain and creates server blocks with upstream load balancing.
+        """
         subdomain_blocks = ""
 
         routes = repos.NginxRouteRepo(self.db).list_all_active()
 
-        # subdomain string: list of routes with that subdomain
+        # Group routes by subdomain
         subdomains = {}
         for route in routes:
             subdomains.setdefault(route.subdomain, []).append(route)
@@ -143,16 +170,18 @@ server {{
         for subdomain, routes in subdomains.items():
             path_blocks, upstream_blocks = self._generate_http_path_blocks(routes)
 
-            # ---------- 2. choose cert/key path ----------
+            # Determine SSL certificate path based on subdomain structure
             if subdomain in ("@", "") or "." not in subdomain:
                 label_key = ""
             else:
+                # For multi-level subdomains, use the parent domain for wildcard cert
                 label_key = ".".join(subdomain.split(".")[1:]) + "."
 
             dir_name = f"{label_key}{route.domain.name}"
             crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
             key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
 
+            # Generate HTTPS server block with SSL and proxy configuration
             subdomain_blocks += f"""
 {upstream_blocks}
 server {{
@@ -174,6 +203,10 @@ server {{
         return subdomain_blocks
 
     def _generate_http_path_blocks(self, routes: list[NginxRoute]):
+        """
+        Generate nginx location blocks for proxying requests to backends.
+        Handles both redirect and proxy protocols with proper header forwarding.
+        """
         proxy_blocks = ""
         upstream_blocks = ""
 
@@ -181,7 +214,7 @@ server {{
             path = route.path_prefix if route.path_prefix.startswith("/") else f"/{route.path_prefix}"
 
             if route.protocol == NginxRouteProtocol.REDIRECT:
-                # get first host only
+                # Simple redirect to first host
                 host = route.hosts[0] if route.hosts else None
                 if host:
                     proxy_blocks += f"""
@@ -191,13 +224,16 @@ location {path} {{
 """
                     continue
 
+            # Create upstream for load balancing
             upstream_name = self._get_upstream_name()
             protocol = "http://" if route.protocol == NginxRouteProtocol.HTTP else "https://"
             backend_path = route.backend_path
             upstream_blocks += self._get_upstream(upstream_name, route.hosts)
 
+            # Generate path rewriting and proxy headers
             rewrite = "" if route.path_prefix == "/" else f"rewrite ^{route.path_prefix}(.*)$ /$1 break;"
             backend_path_header = f"proxy_set_header X-Forwarded-Prefix {route.path_prefix};" if route.path_prefix else ""
+            
             proxy_blocks += f"""
     location {path} {{
         {rewrite}

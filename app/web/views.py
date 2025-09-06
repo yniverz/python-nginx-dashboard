@@ -1,3 +1,7 @@
+"""
+Web interface views and routes for the Multi-Domain Edge Manager.
+Handles authentication, CRUD operations, and background job management.
+"""
 from datetime import datetime
 import threading
 import traceback
@@ -17,26 +21,33 @@ from app.persistence.models import (
 )
 from app.services.common import JOB_RUNNING, get_job_result, propagate_changes, background_publish
 
+# Template directory for Jinja2 templates
 ROOT = (Path(__file__).resolve().parent / "templates").resolve()
 
 templates = Jinja2Templates(directory=ROOT)
 router = APIRouter()
 
-
+# Ensure database tables exist
 Base.metadata.create_all(bind=engine)
 
 
 
 
 def flash(request: Request, message: str, category: str = "info") -> None:
-    # Store messages in session (list of dicts)
+    """
+    Store flash messages in the session for display on the next page.
+    Messages are automatically displayed and removed by the middleware.
+    """
     bucket = request.session.get("_flashes", [])
     bucket.append({"message": message, "category": category})
     request.session["_flashes"] = bucket
 
 
 def is_safe_path(path: str) -> bool:
-    """Only allow local, absolute paths like '/domains' to prevent open redirects."""
+    """
+    Validate that a path is safe for redirects to prevent open redirect attacks.
+    Only allows local, absolute paths like '/domains'.
+    """
     if not path:
         return False
     parts = urlparse(path)
@@ -44,10 +55,9 @@ def is_safe_path(path: str) -> bool:
 
 def authenticate(db: Session, username: str, password: str):
     """
-    Replace this with your real user lookup + password check.
-    For demo purposes, accept admin/admin.
+    Simple authentication function using configured credentials.
+    In production, this should be replaced with proper user management.
     """
-    # if username == "admin" and password == "admin":
     if username == settings.WEB_USERNAME and password == settings.WEB_PASSWORD:
         return {"id": 1, "username": "admin"}
     return None
@@ -56,7 +66,7 @@ def authenticate(db: Session, username: str, password: str):
 
 @router.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
-    # If already logged in, bounce to next (or /)
+    """Display the login form, redirecting to dashboard if already authenticated."""
     if request.session.get("user_id"):
         dest = request.url_for("view_dashboard")
         return RedirectResponse(dest, status_code=303)
@@ -71,21 +81,22 @@ def login_submit(
     password: str = Form(...),
     remember: bool = Form(False),
 ):
+    """Process login form submission and authenticate user."""
     user = authenticate(db, username, password)
     if not user:
         flash(request, "Invalid username or password.", "danger")
-        # Re-render form with a 400 for nicer UX and to show the flash
+        # Re-render form with error status to show flash message
         return templates.TemplateResponse(
             "login.jinja2",
             {"request": request},
             status_code=400,
         )
 
-    # Mark session as logged in
+    # Create authenticated session
     request.session["user_id"] = str(user["id"])
     request.session["username"] = user["username"]
     if remember:
-        # If you want persistent cookies, set max_age on SessionMiddleware in create_app
+        # Note: For persistent cookies, configure max_age in SessionMiddleware
         request.session["remember"] = True
 
     flash(request, f"Welcome back, {user['username']}!", "success")
@@ -93,6 +104,7 @@ def login_submit(
 
 @router.get("/logout")
 def logout(request: Request):
+    """Clear session and redirect to login page."""
     request.session.clear()
     flash(request, "You have been logged out.", "success")
     return RedirectResponse(request.url_for("login_form"), status_code=303)
@@ -101,26 +113,33 @@ def logout(request: Request):
 
 @router.get("/", response_class=HTMLResponse)
 def view_dashboard(request: Request, db: Session = Depends(get_db)):
+    """Main dashboard view showing overview of all managed resources."""
     return templates.TemplateResponse("dashboard.jinja2", {"request": request})
-
-
 
 @router.get("/publish", response_class=RedirectResponse)
 def view_publish(request: Request, db: Session = Depends(get_db)):
+    """
+    Trigger background publish job to synchronize configurations.
+    Propagates changes and starts background job if not already running.
+    """
     if not JOB_RUNNING:
         propagate_changes(db)
         threading.Thread(target=background_publish).start()
 
     return RedirectResponse(url=request.url_for("view_publish_status"), status_code=303)
 
-
 @router.get("/publish/wait", response_class=Union[HTMLResponse, RedirectResponse])
 def view_publish_status(request: Request):
+    """
+    Show publish job status with auto-refresh.
+    Redirects to dashboard when job completes.
+    """
     job_result = get_job_result()
     if job_result:
         flash(request, f"{job_result}", "info")
         return RedirectResponse(request.url_for("view_dashboard"), status_code=303)
 
+    # Auto-refresh page every 2 seconds while job is running
     return HTMLResponse(f"""
 <!DOCTYPE html>
 <html>
