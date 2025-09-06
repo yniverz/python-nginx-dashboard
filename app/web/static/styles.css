@@ -325,7 +325,16 @@ tbody tr:hover { background: var(--primary-soft); }
 .muted {
   color: var(--text-muted) !important;
   opacity: .7;
-  pointer-events: none;
+  user-select: text; /* Allow text selection */
+}
+
+.muted a,
+.muted button,
+.muted input,
+.muted select,
+.muted textarea {
+  pointer-events: none; /* Prevent clicks on interactive elements */
+  cursor: default;
 }
 
 /* Make tables scroll on small screens */
