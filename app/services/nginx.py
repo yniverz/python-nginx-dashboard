@@ -112,10 +112,14 @@ map $http_upgrade $connection_upgrade {{
 
 """
         for domain in domains:
+            routes = repos.NginxRouteRepo(self.db).list_by_domain(domain.id)
+            if not any(r.active for r in routes):
+                continue
+
             config += f"""
 server {{
     listen 80;
-    server_name {domain};
+    server_name {domain.name} *.{domain.name};
     return 301 https://$host$request_uri;
 }}
 """
