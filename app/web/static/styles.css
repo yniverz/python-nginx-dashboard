@@ -303,6 +303,7 @@ table {
   overflow: hidden; /* enables rounded corners */
   background: var(--bg-elev);
   box-shadow: var(--shadow-sm);
+  table-layout: fixed; /* Force table to respect column widths */
 }
 
 thead th {
@@ -341,36 +342,65 @@ tbody td {
   max-width: 0; /* Allows table to respect max-width on columns */
 }
 
+
 /* Specific column width constraints for DNS table */
 table th:nth-child(1), /* Name */
-table td:nth-child(1) { max-width: 120px; }
+table td:nth-child(1) { 
+  width: 15%; 
+  max-width: 120px; 
+}
 
 table th:nth-child(2), /* Domain */
-table td:nth-child(2) { max-width: 100px; }
+table td:nth-child(2) { 
+  width: 12%; 
+  max-width: 100px; 
+}
 
 table th:nth-child(3), /* Type */
-table td:nth-child(3) { max-width: 80px; }
+table td:nth-child(3) { 
+  width: 8%; 
+  max-width: 80px; 
+}
 
 table th:nth-child(4), /* Content - most likely to be long */
 table td:nth-child(4) { 
+  width: 25%; 
   max-width: 200px; 
-  min-width: 150px;
+  min-width: 120px;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 
 table th:nth-child(5), /* TTL */
-table td:nth-child(5) { max-width: 60px; }
+table td:nth-child(5) { 
+  width: 6%; 
+  max-width: 60px; 
+}
 
 table th:nth-child(6), /* Priority */
-table td:nth-child(6) { max-width: 70px; }
+table td:nth-child(6) { 
+  width: 8%; 
+  max-width: 70px; 
+}
 
 table th:nth-child(7), /* Proxied */
-table td:nth-child(7) { max-width: 80px; }
+table td:nth-child(7) { 
+  width: 8%; 
+  max-width: 80px; 
+}
 
 table th:nth-child(8), /* Managed By */
-table td:nth-child(8) { max-width: 100px; }
+table td:nth-child(8) { 
+  width: 10%; 
+  max-width: 100px; 
+}
 
 table th:nth-child(9), /* Actions */
-table td:nth-child(9) { max-width: 80px; }
+table td:nth-child(9) { 
+  width: 8%; 
+  max-width: 80px; 
+}
 
 /* ----------------------------
    Cards (optional utility)
