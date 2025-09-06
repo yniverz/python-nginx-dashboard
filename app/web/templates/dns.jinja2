@@ -55,7 +55,7 @@
             <td style="text-align: right;">{{ record.name }}</td>
             <td>{{ record.domain.name }}</td>
             <td>{{ record.type.name }}</td>
-            <td class="text-truncate" title="{{ record.content }}">{{ record.content[:35] + '...' if record.content|length > 35 else record.content }}</td>
+            <td class="text-truncate" title="{{ record.content }}">{{ record.content }}</td>
             <td>{{ record.ttl }}</td>
             <td>{{ record.priority }}</td>
             <td>{{ record.proxied }}</td>
