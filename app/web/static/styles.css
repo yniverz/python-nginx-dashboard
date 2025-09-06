@@ -303,7 +303,6 @@ table {
   overflow: hidden; /* enables rounded corners */
   background: var(--bg-elev);
   box-shadow: var(--shadow-sm);
-  table-layout: fixed; /* Force table to respect column widths */
 }
 
 thead th {
