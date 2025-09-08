@@ -23,7 +23,7 @@ class Domain(Base):
     __tablename__ = "domains"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), unique=True)  # Domain name (e.g., "example.com")
-    auto_wildcard: Mapped[bool] = mapped_column(Boolean, default=True)  # Auto-generate wildcard DNS records
+    auto_wildcard: Mapped[bool] = mapped_column(Boolean, default=False)  # Auto-generate wildcard DNS records
     use_for_direct_prefix: Mapped[bool] = mapped_column(Boolean, default=False)  # Create direct.* subdomains
 
 class DnsRecord(Base):
