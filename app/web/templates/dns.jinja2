@@ -145,7 +145,7 @@
     </thead>
     <tbody>
         {% for record in dns_records %}
-        <tr {% if record.managed_by != "USER" %}class="muted{% if loop.index0 > 0 and record.domain.name != dns_records[loop.index0-1].domain.name %} domain-separator{% endif %}"{% else %}{% if loop.index0 > 0 and record.domain.name != dns_records[loop.index0-1].domain.name %}class="domain-separator"{% endif %}{% endif %}>
+        <tr {% if record.managed_by != "USER" %}class="muted{% if loop.index0 == 0 or record.domain.name != dns_records[loop.index0-1].domain.name %} domain-separator{% endif %}"{% else %}{% if loop.index0 > 0 and record.domain.name != dns_records[loop.index0-1].domain.name %}class="domain-separator"{% endif %}{% endif %}>
             <td style="text-align: right;">{{ record.name }}</td>
             <td>{{ record.domain.name }}</td>
             <td>{{ record.type.name }}</td>
