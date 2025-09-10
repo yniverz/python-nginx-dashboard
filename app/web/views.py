@@ -27,13 +27,20 @@ from app.services.common import JOB_RUNNING, get_job_result, propagate_changes, 
 # Template directory for Jinja2 templates
 ROOT = (Path(__file__).resolve().parent / "templates").resolve()
 
-templates = Jinja2Templates(directory=ROOT)
-router = APIRouter()
+# Initialize Jinja2 environment directly to add custom filters
+from jinja2 import Environment, FileSystemLoader
+env = Environment(loader=FileSystemLoader(ROOT))
 
-# Custom Jinja2 filter for JSON serialization
-@templates.jinja_env.filter(name='tojson')
+# Add custom JSON filter
 def tojson_filter(obj):
     return json.dumps(obj)
+env.filters["tojson"] = tojson_filter
+
+# Set up FastAPI templates with our customized environment
+templates = Jinja2Templates(directory=ROOT)
+templates.env = env
+
+router = APIRouter()
 
 # Ensure database tables exist
 Base.metadata.create_all(bind=engine)
