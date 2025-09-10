@@ -2,6 +2,18 @@
 {% block content %}
 <h2>Welcome to the Multi-Domain Edge Manager!</h2>
 
+<!-- Debug Information -->
+<details>
+    <summary>Debug Information (Click to expand)</summary>
+    <div class="debug-info">
+        <h4>Type Information:</h4>
+        <pre>{{ visualization_data.debug.types|pprint }}</pre>
+        
+        <h4>Sample Values:</h4>
+        <pre>{{ visualization_data.debug.sample_values|pprint }}</pre>
+    </div>
+</details>
+
 <!-- Publish Button -->
 <div class="action-buttons">
     <a href="{{ url_for('view_publish') }}" class="btn btn-primary">Publish Changes</a>
@@ -52,10 +64,18 @@
                 <tr>
                     <td>{{ domain.name }}</td>
                     <td>
+                        <!-- Debug info for domain ID -->
+                        Domain ID type: {{ domain.id.__class__.__name__ }} Value: {{ domain.id }}
+                        <br>
                         {% set subdomain_count = 0 %}
                         {% for d in visualization_data.dns_records %}
-                            <!-- Convert both to string for comparison -->
-                            {% if d.domain_id|string == domain.id|string %}
+                            <!-- Debug first few records -->
+                            {% if loop.index <= 2 %}
+                                <small>[Record {{ loop.index }}: ID type: {{ d.domain_id.__class__.__name__ }} Value: {{ d.domain_id }}]</small><br>
+                            {% endif %}
+                            
+                            <!-- Try multiple comparison methods -->
+                            {% if d.domain_id == domain.id %}
                                 {% set subdomain_count = subdomain_count + 1 %}
                             {% endif %}
                         {% endfor %}
@@ -63,13 +83,27 @@
                     </td>
                     <td>
                         {% set route_count = 0 %}
-                        {% for r in visualization_data.routes %}
-                            <!-- Convert both to string for comparison -->
-                            {% if r.domain_id|string == domain.id|string %}
-                                {% set route_count = route_count + 1 %}
-                            {% endif %}
-                        {% endfor %}
-                        {{ route_count }} route(s)
+                        
+                        <!-- Test different comparison approaches -->
+                        <details>
+                            <summary>{{ route_count }} route(s)</summary>
+                            {% for r in visualization_data.routes %}
+                                <div style="font-size: 12px; border-bottom: 1px solid #eee; padding: 5px 0;">
+                                    Route: {{ r.subdomain }}, domain_id: {{ r.domain_id }} ({{ r.domain_id.__class__.__name__ }})<br>
+                                    Current domain id: {{ domain.id }} ({{ domain.id.__class__.__name__ }})<br>
+                                    
+                                    <!-- Test different comparisons -->
+                                    == comparison: {% if r.domain_id == domain.id %}✅{% else %}❌{% endif %}<br>
+                                    String comparison: {% if r.domain_id|string == domain.id|string %}✅{% else %}❌{% endif %}<br>
+                                    Integer comparison: {% if r.domain_id|int == domain.id|int %}✅{% else %}❌{% endif %}
+                                    
+                                    <!-- Increment counter if any method works -->
+                                    {% if r.domain_id|int == domain.id|int %}
+                                        {% set route_count = route_count + 1 %}
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </details>
                     </td>
                 </tr>
                 {% endfor %}
@@ -131,8 +165,14 @@ document.addEventListener('DOMContentLoaded', function() {
         gatewayServers: {{ visualization_data.gateway_servers|tojson|safe }},
         gatewayClients: {{ visualization_data.gateway_clients|tojson|safe }},
         gatewayConnections: {{ visualization_data.gateway_connections|tojson|safe }},
-        localIp: {{ visualization_data.local_ip|tojson|safe }}
+        localIp: {{ visualization_data.local_ip|tojson|safe }},
+        debug: {{ visualization_data.debug|tojson|safe }}
     };
+    
+    // Log some debug info to browser console
+    console.log('Debug info:', visualizationData.debug);
+    console.log('Sample domain:', visualizationData.domains[0]);
+    console.log('Sample route:', visualizationData.routes[0]);
     
     // Network graph container
     const container = document.getElementById('networkGraph');
@@ -164,16 +204,28 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add route nodes and connect to domains
     visualizationData.routes.forEach(route => {
-        const domainNode = `domain-${route.domain_id}`;
+        // Convert IDs to numbers for consistent comparison
+        const routeDomainId = parseInt(route.domain_id, 10);
         const routeId = `route-${route.id}`;
+        const domainNode = `domain-${routeDomainId}`;
+        
+        // Find matching domain using numeric comparison
+        const matchingDomain = visualizationData.domains.find(d => parseInt(d.id, 10) === routeDomainId);
+        
+        console.log('Route domain matching:', { 
+            routeDomainId, 
+            matchingDomain: matchingDomain ? matchingDomain.id : 'not found',
+            domainName: matchingDomain ? matchingDomain.name : 'unknown'
+        });
         
         nodes.push({
             id: routeId,
             type: 'route',
-            name: `${route.subdomain}.${visualizationData.domains.find(d => String(d.id) === String(route.domain_id))?.name || ''}`,
+            name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
             x: Math.random() * width,
             y: Math.random() * height,
-            color: '#2ecc71'
+            color: '#2ecc71',
+            domainId: routeDomainId  // Store for reference
         });
         
         links.push({

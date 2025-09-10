@@ -39,8 +39,9 @@ class ModelEncoder(json.JSONEncoder):
 # Let's use FastAPI's standard Jinja2Templates for proper integration
 templates = Jinja2Templates(directory=ROOT)
 
-# Add custom JSON filter directly
+# Add custom filters
 templates.env.filters["tojson"] = lambda obj: json.dumps(obj, cls=ModelEncoder)
+templates.env.filters["pprint"] = lambda obj: json.dumps(obj, indent=2, cls=ModelEncoder)
 
 # Note: Don't override templates.env completely, as it contains necessary context functions
 # like url_for that are added by FastAPI/Starlette
@@ -90,7 +91,13 @@ def model_to_dict(obj: Any) -> Dict:
         # Get column attributes directly from the table
         for column in obj.__table__.columns:
             value = getattr(obj, column.name)
-            if isinstance(value, Enum):
+            if column.name == 'id' or column.name.endswith('_id'):
+                # Make sure IDs are consistent integers
+                try:
+                    result[column.name] = int(value) if value is not None else None
+                except (ValueError, TypeError):
+                    result[column.name] = value
+            elif isinstance(value, Enum):
                 result[column.name] = value.value
             else:
                 result[column.name] = value
@@ -126,6 +133,13 @@ def prepare_visualization_data(data_dict: Dict[str, Any]) -> Dict[str, Any]:
     Handles nested structures like routes with hosts.
     """
     result = {}
+    
+    # Add debug object to help troubleshoot in the template
+    debug_info = {
+        "types": {},
+        "sample_values": {}
+    }
+    
     for key, value in data_dict.items():
         # Handle simple values
         if isinstance(value, (str, int, float, bool)) or value is None:
@@ -134,6 +148,17 @@ def prepare_visualization_data(data_dict: Dict[str, Any]) -> Dict[str, Any]:
             
         # Handle lists
         if isinstance(value, list):
+            # Add type information to debug
+            if value and key in ['domains', 'routes', 'dns_records']:
+                sample_item = value[0] if value else None
+                if sample_item:
+                    debug_info["types"][key] = str(type(sample_item))
+                    if hasattr(sample_item, 'id'):
+                        debug_info["sample_values"][f"{key}_id"] = {
+                            "type": str(type(sample_item.id)),
+                            "value": sample_item.id
+                        }
+            
             # Process each item in the list
             processed_items = []
             for item in value:
@@ -155,6 +180,9 @@ def prepare_visualization_data(data_dict: Dict[str, Any]) -> Dict[str, Any]:
             
         # Other types, just pass through
         result[key] = value
+    
+    # Add debug info to result
+    result["debug"] = debug_info
             
     return result
 
