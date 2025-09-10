@@ -63,8 +63,7 @@
                     <td>
                         {% set route_count = 0 %}
                         {% for r in visualization_data.routes %}
-                            "{{r.domain_id}}", "{{domain.id}}"
-                            {% if r.domain_id == domain.id %}
+                            {% if (r.domain_id|string) == (domain.id|string) %}
                                 {% set route_count = route_count + 1 %}
                             {% endif %}
                         {% endfor %}
