@@ -52,13 +52,21 @@
                 <tr>
                     <td>{{ domain.name }}</td>
                     <td>
-                        {% set dns_for_domain = [d for d in visualization_data.dns_records if d.domain_id == domain.id] %}
-                        {% set subdomain_count = dns_for_domain|length %}
+                        {% set subdomain_count = 0 %}
+                        {% for d in visualization_data.dns_records %}
+                            {% if d.domain_id == domain.id %}
+                                {% set subdomain_count = subdomain_count + 1 %}
+                            {% endif %}
+                        {% endfor %}
                         {{ subdomain_count }} record(s)
                     </td>
                     <td>
-                        {% set routes_for_domain = [r for r in visualization_data.routes if r.domain_id == domain.id] %}
-                        {% set route_count = routes_for_domain|length %}
+                        {% set route_count = 0 %}
+                        {% for r in visualization_data.routes %}
+                            {% if r.domain_id == domain.id %}
+                                {% set route_count = route_count + 1 %}
+                            {% endif %}
+                        {% endfor %}
                         {{ route_count }} route(s)
                     </td>
                 </tr>
@@ -82,14 +90,24 @@
                 <tr>
                     <td>{{ server.name }} ({{ server.host }})</td>
                     <td>
-                        {% set clients_for_server = [c for c in visualization_data.gateway_clients if c.server_id == server.id] %}
-                        {{ clients_for_server|length }}
+                        {% set client_count = 0 %}
+                        {% for c in visualization_data.gateway_clients %}
+                            {% if c.server_id == server.id %}
+                                {% set client_count = client_count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ client_count }}
                     </td>
                     <td>
                         {% set conn_count = 0 %}
-                        {% for client in clients_for_server %}
-                            {% set connections = [c for c in visualization_data.gateway_connections if c.client_id == client.id] %}
-                            {% set conn_count = conn_count + connections|length %}
+                        {% for client in visualization_data.gateway_clients %}
+                            {% if client.server_id == server.id %}
+                                {% for c in visualization_data.gateway_connections %}
+                                    {% if c.client_id == client.id %}
+                                        {% set conn_count = conn_count + 1 %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
                         {% endfor %}
                         {{ conn_count }}
                     </td>
@@ -105,13 +123,13 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Data passed from Python
     const visualizationData = {
-        domains: {{ visualization_data.domains|tojson }},
-        routes: {{ visualization_data.routes|tojson }},
-        dnsRecords: {{ visualization_data.dns_records|tojson }},
-        gatewayServers: {{ visualization_data.gateway_servers|tojson }},
-        gatewayClients: {{ visualization_data.gateway_clients|tojson }},
-        gatewayConnections: {{ visualization_data.gateway_connections|tojson }},
-        localIp: {{ visualization_data.local_ip|tojson }}
+        domains: {{ visualization_data.domains|tojson|safe }},
+        routes: {{ visualization_data.routes|tojson|safe }},
+        dnsRecords: {{ visualization_data.dns_records|tojson|safe }},
+        gatewayServers: {{ visualization_data.gateway_servers|tojson|safe }},
+        gatewayClients: {{ visualization_data.gateway_clients|tojson|safe }},
+        gatewayConnections: {{ visualization_data.gateway_connections|tojson|safe }},
+        localIp: {{ visualization_data.local_ip|tojson|safe }}
     };
     
     // Network graph container
