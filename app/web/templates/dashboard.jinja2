@@ -336,51 +336,71 @@ document.addEventListener('DOMContentLoaded', function() {
             text.textContent = node.name || node.id;
             g.appendChild(text);
             
-            // Make nodes draggable
-            let isDragging = false;
-            let offset = { x: 0, y: 0 };
+            // Make nodes draggable with improved handling
+            // Store the current node in the DOM element for easier access
+            g.node = node;
             
-            g.addEventListener('mousedown', (e) => {
+            // Add event listener directly to the node
+            g.addEventListener('mousedown', startDragging);
+            
+            // Function to handle the start of dragging
+            function startDragging(e) {
                 e.preventDefault(); // Prevent text selection during drag
-                isDragging = true;
+                e.stopPropagation(); // Prevent event from bubbling
+                
+                // Set global dragging state
+                window._currentDragNode = node;
                 
                 // Get SVG coordinates of the mouse event
                 const svgPoint = getSVGCoordinates(svg, e.clientX, e.clientY);
-                offset.x = svgPoint.x - node.x;
-                offset.y = svgPoint.y - node.y;
+                window._dragOffset = { 
+                    x: svgPoint.x - node.x, 
+                    y: svgPoint.y - node.y
+                };
                 
                 // Add dragging class for styling
                 g.classList.add('dragging');
-            });
+            }
             
-            // Use one global event listener for mousemove
+            // Set up global drag handlers if not already done
             if (!window._dragHandlerAttached) {
                 window._dragHandlerAttached = true;
+                window._isDragging = false;
                 
+                // Global mousemove handler
                 document.addEventListener('mousemove', (e) => {
-                    if (!isDragging) return;
+                    // Only process if we have a node being dragged
+                    if (!window._currentDragNode) return;
+                    
+                    window._isDragging = true;
                     
                     // Get SVG coordinates of the mouse event
                     const svgPoint = getSVGCoordinates(svg, e.clientX, e.clientY);
-                    const draggedNodeId = e.target.closest('g')?.getAttribute('data-id');
-                    
-                    // Find the node being dragged
-                    const draggedNode = nodes.find(n => n.id === draggedNodeId);
+                    const draggedNode = window._currentDragNode;
                     
                     if (draggedNode) {
-                        draggedNode.x = ensureNumber(svgPoint.x - offset.x);
-                        draggedNode.y = ensureNumber(svgPoint.y - offset.y);
+                        // Calculate new position with the stored offset
+                        draggedNode.x = ensureNumber(svgPoint.x - window._dragOffset.x);
+                        draggedNode.y = ensureNumber(svgPoint.y - window._dragOffset.y);
                         
-                        // Keep within bounds
-                        draggedNode.x = Math.max(50, Math.min(width - 50, draggedNode.x));
-                        draggedNode.y = Math.max(50, Math.min(height - 50, draggedNode.y));
+                        // Keep within bounds with more padding
+                        const padding = 80;
+                        draggedNode.x = Math.max(padding, Math.min(width - padding, draggedNode.x));
+                        draggedNode.y = Math.max(padding, Math.min(height - padding, draggedNode.y));
                         
+                        // Update visualization without rerunning simulation
                         createVisualization();
                     }
                 });
                 
+                // Global mouseup handler
                 document.addEventListener('mouseup', () => {
-                    isDragging = false;
+                    // Clear dragging state
+                    window._currentDragNode = null;
+                    window._dragOffset = null;
+                    window._isDragging = false;
+                    
+                    // Remove visual indicators
                     document.querySelectorAll('.dragging').forEach(el => {
                         el.classList.remove('dragging');
                     });
@@ -412,10 +432,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Advanced force simulation to create a well-distributed layout
     function applyForces() {
-        // Apply repulsion force to separate nodes - stronger for different node types
-        const baseRepulsion = 150; // Increased from 100
-        const domainRepulsion = 200; // Domains need more space
-        const attraction = 0.05; // Reduced from 0.1 for less bunching
+        // Apply repulsion force to separate nodes - with reduced strength for stability
+        const baseRepulsion = 80; // Reduced from 150 to make movement less aggressive
+        const domainRepulsion = 120; // Reduced from 200 to make movement less aggressive
+        const attraction = 0.02; // Reduced from 0.05 for gentler forces
         
         for (let i = 0; i < nodes.length; i++) {
             // Ensure nodes have valid positions
@@ -438,8 +458,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 if (dist > 0 && dist < repulsion) { // Avoid division by zero
-                    // Quadratic force for more natural spacing
-                    const force = (repulsion - dist) * (repulsion - dist) / (repulsion * dist);
+                    // Use a gentler force calculation with damping
+                    const force = Math.min(5, (repulsion - dist) / dist * 0.3);
                     nodes[i].x -= dx * force * 0.5;
                     nodes[i].y -= dy * force * 0.5;
                     nodes[j].x += dx * force * 0.5;
@@ -462,9 +482,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const idealDistance = 80;
                 
                 if (dist > 0) { // Avoid division by zero
-                    // Only attract if distance is too large
+                    // Only attract if distance is too large, with a gentler force
                     if (dist > idealDistance) {
-                        const force = (dist - idealDistance) * attraction / dist;
+                        // Apply a maximum force cap to prevent wild movements
+                        const force = Math.min(0.2, (dist - idealDistance) * attraction / dist);
                         sourceNode.x += dx * force;
                         sourceNode.y += dy * force;
                         targetNode.x -= dx * force;
@@ -474,16 +495,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Center force - gently pull nodes toward the center if they're far out
-        const centerForce = 0.01;
+        // Center force - very gently pull nodes toward the center if they're far out
+        const centerForce = 0.005; // Reduced from 0.01 for gentler centering
         nodes.forEach(node => {
             const dx = width/2 - node.x;
             const dy = height/2 - node.y;
             const distFromCenter = Math.sqrt(dx*dx + dy*dy);
             
             if (distFromCenter > width/3) {
-                node.x += dx * centerForce;
-                node.y += dy * centerForce;
+                // Apply center force with distance-based scaling
+                const scaledForce = centerForce * (distFromCenter - width/3) / width;
+                node.x += dx * scaledForce;
+                node.y += dy * scaledForce;
             }
         });
         
@@ -514,20 +537,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Run force simulation gradually with damping
+        // Run force simulation with gradual slowdown
         let iteration = 0;
-        const maxIterations = 60; // Increased from 30 for better stabilization
+        const maxIterations = 40; // Reduced from 60 for less simulation time
+        const minDelay = 30; // Minimum delay between iterations to slow down
         
         function runSimulation() {
             if (iteration < maxIterations) {
-                // Apply forces with cooling
+                // Apply forces with gradually decreasing strength
                 applyForces();
                 iteration++;
                 
-                // Use slower animation frames for later iterations to let things settle
-                const delay = Math.min(50, iteration / 2);
+                // Gradually increase delay to slow down the simulation
+                const delay = minDelay + Math.min(100, iteration * 3);
                 setTimeout(runSimulation, delay);
+            } else {
+                // After simulation finishes, make sure all nodes are still draggable
+                ensureDraggable();
             }
+        }
+        
+        // Ensure all nodes are properly set up for dragging
+        function ensureDraggable() {
+            // Refresh the visualization to ensure all nodes have event listeners
+            createVisualization();
         }
         
         runSimulation();
@@ -545,6 +578,24 @@ document.addEventListener('DOMContentLoaded', function() {
     justify-content: space-around;
     flex-wrap: wrap;
     margin: 20px 0;
+}
+
+/* Network Graph Dragging Styles */
+.dragging {
+    cursor: grabbing !important;
+}
+
+g {
+    cursor: grab;
+}
+
+g circle {
+    transition: stroke-width 0.2s, stroke-opacity 0.2s;
+}
+
+g:hover circle {
+    stroke-width: 2px;
+    stroke-opacity: 1;
 }
 
 .stat-card {
