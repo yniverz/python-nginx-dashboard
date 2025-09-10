@@ -54,7 +54,8 @@
                     <td>
                         {% set subdomain_count = 0 %}
                         {% for d in visualization_data.dns_records %}
-                            {% if d.domain_id == domain.id %}
+                            <!-- Convert both to string for comparison -->
+                            {% if d.domain_id|string == domain.id|string %}
                                 {% set subdomain_count = subdomain_count + 1 %}
                             {% endif %}
                         {% endfor %}
@@ -63,8 +64,8 @@
                     <td>
                         {% set route_count = 0 %}
                         {% for r in visualization_data.routes %}
-                            {% if r.domain_id == domain.id %}
-                                {{ r.path }}
+                            <!-- Convert both to string for comparison -->
+                            {% if r.domain_id|string == domain.id|string %}
                                 {% set route_count = route_count + 1 %}
                             {% endif %}
                         {% endfor %}
@@ -93,7 +94,7 @@
                     <td>
                         {% set client_count = 0 %}
                         {% for c in visualization_data.gateway_clients %}
-                            {% if c.server_id == server.id %}
+                            {% if c.server_id|string == server.id|string %}
                                 {% set client_count = client_count + 1 %}
                             {% endif %}
                         {% endfor %}
@@ -102,9 +103,9 @@
                     <td>
                         {% set conn_count = 0 %}
                         {% for client in visualization_data.gateway_clients %}
-                            {% if client.server_id == server.id %}
+                            {% if client.server_id|string == server.id|string %}
                                 {% for c in visualization_data.gateway_connections %}
-                                    {% if c.client_id == client.id %}
+                                    {% if c.client_id|string == client.id|string %}
                                         {% set conn_count = conn_count + 1 %}
                                     {% endif %}
                                 {% endfor %}
@@ -169,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
         nodes.push({
             id: routeId,
             type: 'route',
-            name: `${route.subdomain}.${visualizationData.domains.find(d => d.id === route.domain_id)?.name || ''}`,
+            name: `${route.subdomain}.${visualizationData.domains.find(d => String(d.id) === String(route.domain_id))?.name || ''}`,
             x: Math.random() * width,
             y: Math.random() * height,
             color: '#2ecc71'
