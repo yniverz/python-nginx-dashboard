@@ -290,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 line.setAttribute('stroke', '#6c757d');
                 line.setAttribute('stroke-width', '2');
                 line.setAttribute('stroke-opacity', '0.7');
+                line.setAttribute('stroke-linecap', 'round');
                 svg.appendChild(line);
             }
         });
@@ -304,15 +305,13 @@ document.addEventListener('DOMContentLoaded', function() {
             g.setAttribute('transform', `translate(${x}, ${y})`);
             g.setAttribute('data-id', node.id);
             
-            // Create node circle with a glowing effect
-            const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            glow.setAttribute('r', node.type === 'domain' ? 14 : 10);
-            glow.setAttribute('fill', 'none');
-            glow.setAttribute('stroke', node.color);
-            glow.setAttribute('stroke-width', '2');
-            glow.setAttribute('stroke-opacity', '0.5');
-            glow.setAttribute('filter', 'blur(3px)');
-            g.appendChild(glow);
+            // Create node circle with a glow effect using a different approach
+            // First create a larger background circle
+            const background = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            background.setAttribute('r', node.type === 'domain' ? 15 : 11);
+            background.setAttribute('fill', node.color);
+            background.setAttribute('opacity', '0.3');
+            g.appendChild(background);
             
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('r', node.type === 'domain' ? 12 : 8);
@@ -322,11 +321,15 @@ document.addEventListener('DOMContentLoaded', function() {
             g.appendChild(circle);
             
             // Create text label with better contrast
+            // Create a text background for better legibility
+            const textBackground = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dy', '25');
             text.setAttribute('font-size', '12px');
             text.setAttribute('fill', '#ffffff');
+            text.setAttribute('font-weight', 'bold');
             text.setAttribute('stroke', '#000000');
             text.setAttribute('stroke-width', '0.5');
             text.setAttribute('paint-order', 'stroke');
@@ -517,13 +520,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         function runSimulation() {
             if (iteration < maxIterations) {
-                // Apply cooling factor to gradually reduce forces as simulation progresses
-                const coolingFactor = 1 - (iteration / maxIterations); 
-                
-                // Modify force strength with cooling
-                baseRepulsion = baseRepulsion * (0.9 + coolingFactor * 0.1);
-                domainRepulsion = domainRepulsion * (0.9 + coolingFactor * 0.1);
-                
+                // Apply forces with cooling
                 applyForces();
                 iteration++;
                 
