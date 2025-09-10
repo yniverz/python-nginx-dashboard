@@ -31,9 +31,7 @@ ROOT = (Path(__file__).resolve().parent / "templates").resolve()
 templates = Jinja2Templates(directory=ROOT)
 
 # Add custom JSON filter directly
-@templates.env.filters.update({"tojson": lambda obj: json.dumps(obj)})
-def update_filters():
-    pass
+templates.env.filters["tojson"] = lambda obj: json.dumps(obj)
 
 # Note: Don't override templates.env completely, as it contains necessary context functions
 # like url_for that are added by FastAPI/Starlette
