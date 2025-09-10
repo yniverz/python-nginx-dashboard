@@ -27,18 +27,16 @@ from app.services.common import JOB_RUNNING, get_job_result, propagate_changes, 
 # Template directory for Jinja2 templates
 ROOT = (Path(__file__).resolve().parent / "templates").resolve()
 
-# Initialize Jinja2 environment directly to add custom filters
-from jinja2 import Environment, FileSystemLoader
-env = Environment(loader=FileSystemLoader(ROOT))
-
-# Add custom JSON filter
-def tojson_filter(obj):
-    return json.dumps(obj)
-env.filters["tojson"] = tojson_filter
-
-# Set up FastAPI templates with our customized environment
+# Let's use FastAPI's standard Jinja2Templates for proper integration
 templates = Jinja2Templates(directory=ROOT)
-templates.env = env
+
+# Add custom JSON filter directly
+@templates.env.filters.update({"tojson": lambda obj: json.dumps(obj)})
+def update_filters():
+    pass
+
+# Note: Don't override templates.env completely, as it contains necessary context functions
+# like url_for that are added by FastAPI/Starlette
 
 router = APIRouter()
 
