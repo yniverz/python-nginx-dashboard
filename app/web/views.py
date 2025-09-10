@@ -5,12 +5,15 @@ Handles authentication, CRUD operations, and background job management.
 from datetime import datetime
 import threading
 import traceback
-from typing import Union
+from typing import Union, Any, List, Dict
+import json
+from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.persistence.db import get_db, Base, engine
@@ -26,6 +29,11 @@ ROOT = (Path(__file__).resolve().parent / "templates").resolve()
 
 templates = Jinja2Templates(directory=ROOT)
 router = APIRouter()
+
+# Custom Jinja2 filter for JSON serialization
+@templates.jinja_env.filter(name='tojson')
+def tojson_filter(obj):
+    return json.dumps(obj)
 
 # Ensure database tables exist
 Base.metadata.create_all(bind=engine)
@@ -52,6 +60,46 @@ def is_safe_path(path: str) -> bool:
         return False
     parts = urlparse(path)
     return parts.scheme == "" and parts.netloc == "" and path.startswith("/")
+
+def model_to_dict(obj: Any) -> Dict:
+    """
+    Convert SQLAlchemy model to dictionary for JSON serialization.
+    Handles enum values and relationships.
+    """
+    if isinstance(obj, Enum):
+        return obj.value
+    
+    result = {}
+    for key in dir(obj):
+        if not key.startswith('_') and key not in ('metadata', 'registry'):
+            value = getattr(obj, key)
+            if callable(value):
+                continue
+            if isinstance(value, Enum):
+                result[key] = value.value
+            elif hasattr(value, "__table__"):
+                # Skip full relationship objects to avoid recursion
+                result[key + "_id"] = getattr(obj, key + "_id", None)
+            else:
+                result[key] = value
+    return result
+
+def prepare_visualization_data(data_dict: Dict[str, List]) -> Dict[str, List]:
+    """
+    Convert SQLAlchemy models to dictionaries for JSON serialization in templates.
+    """
+    result = {}
+    for key, items in data_dict.items():
+        if key == "local_ip":
+            result[key] = data_dict[key]  # Pass through string value
+            continue
+            
+        if not isinstance(items, list):
+            result[key] = items
+            continue
+            
+        result[key] = [model_to_dict(item) for item in items]
+    return result
 
 def authenticate(db: Session, username: str, password: str):
     """
@@ -114,7 +162,42 @@ def logout(request: Request):
 @router.get("/", response_class=HTMLResponse)
 def view_dashboard(request: Request, db: Session = Depends(get_db)):
     """Main dashboard view showing overview of all managed resources."""
-    return templates.TemplateResponse("dashboard.jinja2", {"request": request})
+    # Get domains, routes, and DNS records for visualization
+    domain_repo = repos.DomainRepo(db)
+    route_repo = repos.NginxRouteRepo(db)
+    dns_repo = repos.DnsRecordRepo(db)
+    gateway_server_repo = repos.GatewayServerRepo(db)
+    gateway_client_repo = repos.GatewayClientRepo(db)
+    gateway_conn_repo = repos.GatewayConnectionRepo(db)
+    
+    domains = domain_repo.list_all()
+    routes = route_repo.list_all()
+    dns_records = dns_repo.list_all()
+    gateway_servers = gateway_server_repo.list_all()
+    gateway_clients = gateway_client_repo.list_all()
+    gateway_connections = gateway_conn_repo.list_all()
+    
+    # Create a visualization data structure
+    raw_data = {
+        "domains": domains,
+        "routes": routes,
+        "dns_records": dns_records,
+        "gateway_servers": gateway_servers,
+        "gateway_clients": gateway_clients,
+        "gateway_connections": gateway_connections,
+        "local_ip": settings.LOCAL_IP
+    }
+    
+    # Convert SQLAlchemy models to dictionaries for JSON serialization
+    visualization_data = prepare_visualization_data(raw_data)
+    
+    return templates.TemplateResponse(
+        "dashboard.jinja2", 
+        {
+            "request": request,
+            "visualization_data": visualization_data
+        }
+    )
 
 @router.get("/publish", response_class=RedirectResponse)
 def view_publish(request: Request, db: Session = Depends(get_db)):
