@@ -67,26 +67,33 @@
                         <!-- Debug info for domain ID -->
                         Domain ID type: {{ domain.id.__class__.__name__ }} Value: {{ domain.id }}
                         <br>
-                        {% set subdomain_count = 0 %}
+                        <!-- Use same list-based counting approach -->
+                        {% set matching_records = [] %}
                         {% for d in visualization_data.dns_records %}
                             <!-- Debug first few records -->
                             {% if loop.index <= 2 %}
                                 <small>[Record {{ loop.index }}: ID type: {{ d.domain_id.__class__.__name__ }} Value: {{ d.domain_id }}]</small><br>
                             {% endif %}
                             
-                            <!-- Try multiple comparison methods -->
-                            {% if d.domain_id == domain.id %}
-                                {% set subdomain_count = subdomain_count + 1 %}
+                            <!-- Try multiple comparison methods and collect matches -->
+                            {% if d.domain_id|int == domain.id|int %}
+                                {% set _ = matching_records.append(d) %}
                             {% endif %}
                         {% endfor %}
-                        {{ subdomain_count }} record(s)
+                        <strong>{{ matching_records|length }} record(s)</strong>
                     </td>
                     <td>
-                        {% set route_count = 0 %}
+                        <!-- Count routes using a direct approach -->
+                        {% set matching_routes = [] %}
+                        {% for r in visualization_data.routes %}
+                            {% if r.domain_id|int == domain.id|int %}
+                                {% set _ = matching_routes.append(r) %}
+                            {% endif %}
+                        {% endfor %}
                         
-                        <!-- Test different comparison approaches -->
+                        <!-- Display count and details -->
                         <details>
-                            <summary>{{ route_count }} route(s)</summary>
+                            <summary><strong>{{ matching_routes|length }} route(s)</strong></summary>
                             {% for r in visualization_data.routes %}
                                 <div style="font-size: 12px; border-bottom: 1px solid #eee; padding: 5px 0;">
                                     Route: {{ r.subdomain }}, domain_id: {{ r.domain_id }} ({{ r.domain_id.__class__.__name__ }})<br>
@@ -97,9 +104,9 @@
                                     String comparison: {% if r.domain_id|string == domain.id|string %}✅{% else %}❌{% endif %}<br>
                                     Integer comparison: {% if r.domain_id|int == domain.id|int %}✅{% else %}❌{% endif %}
                                     
-                                    <!-- Increment counter if any method works -->
+                                    <!-- Highlight if matched -->
                                     {% if r.domain_id|int == domain.id|int %}
-                                        {% set route_count = route_count + 1 %}
+                                        <div style="color: green; font-weight: bold;">MATCHED!</div>
                                     {% endif %}
                                 </div>
                             {% endfor %}
@@ -126,26 +133,26 @@
                 <tr>
                     <td>{{ server.name }} ({{ server.host }})</td>
                     <td>
-                        {% set client_count = 0 %}
+                        {% set matching_clients = [] %}
                         {% for c in visualization_data.gateway_clients %}
-                            {% if c.server_id|string == server.id|string %}
-                                {% set client_count = client_count + 1 %}
+                            {% if c.server_id|int == server.id|int %}
+                                {% set _ = matching_clients.append(c) %}
                             {% endif %}
                         {% endfor %}
-                        {{ client_count }}
+                        <strong>{{ matching_clients|length }}</strong>
                     </td>
                     <td>
-                        {% set conn_count = 0 %}
+                        {% set matching_connections = [] %}
                         {% for client in visualization_data.gateway_clients %}
-                            {% if client.server_id|string == server.id|string %}
+                            {% if client.server_id|int == server.id|int %}
                                 {% for c in visualization_data.gateway_connections %}
-                                    {% if c.client_id|string == client.id|string %}
-                                        {% set conn_count = conn_count + 1 %}
+                                    {% if c.client_id|int == client.id|int %}
+                                        {% set _ = matching_connections.append(c) %}
                                     {% endif %}
                                 {% endfor %}
                             {% endif %}
                         {% endfor %}
-                        {{ conn_count }}
+                        <strong>{{ matching_connections|length }}</strong>
                     </td>
                 </tr>
                 {% endfor %}
