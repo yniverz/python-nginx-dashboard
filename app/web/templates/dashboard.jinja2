@@ -265,15 +265,27 @@ document.addEventListener('DOMContentLoaded', function() {
         node.y = ensureNumber(node.y, Math.random() * height);
     });
     
-    // Function to create the visualization
+    // Create map of nodes by ID for faster lookups
+    const nodeMap = {};
+    nodes.forEach(node => {
+        nodeMap[node.id] = node;
+    });
+    
+    // Function to create the visualization with performance optimizations
     function createVisualization() {
-        // Clear SVG
-        svg.innerHTML = '';
+        // Clear SVG - more efficient than innerHTML = ''
+        while (svg.firstChild) {
+            svg.removeChild(svg.firstChild);
+        }
+        
+        // Create all lines first for better performance
+        const linesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        linesGroup.setAttribute('class', 'links-group');
         
         // Create links
         links.forEach(link => {
-            const sourceNode = nodes.find(n => n.id === link.source);
-            const targetNode = nodes.find(n => n.id === link.target);
+            const sourceNode = nodeMap[link.source];
+            const targetNode = nodeMap[link.target];
             
             if (sourceNode && targetNode) {
                 // Ensure valid coordinates
@@ -291,12 +303,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 line.setAttribute('stroke-width', '2');
                 line.setAttribute('stroke-opacity', '0.7');
                 line.setAttribute('stroke-linecap', 'round');
-                svg.appendChild(line);
+                linesGroup.appendChild(line);
             }
         });
         
-        // Create nodes
-        nodes.forEach(node => {
+        // Add all lines at once
+        svg.appendChild(linesGroup);
+        
+        // Create nodes in a single group for better performance
+        const nodesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        nodesGroup.setAttribute('class', 'nodes-group');
+        
+        // Create a reusable function for node creation to improve performance
+        function createNodeElement(node) {
             // Ensure valid coordinates
             const x = ensureNumber(node.x);
             const y = ensureNumber(node.y);
@@ -304,8 +323,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.setAttribute('transform', `translate(${x}, ${y})`);
             g.setAttribute('data-id', node.id);
+            g.setAttribute('class', `node-${node.type}`);
             
-            // Create node circle with a glow effect using a different approach
+            // Create node circle with a glow effect using a more efficient approach
             // First create a larger background circle
             const background = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             background.setAttribute('r', node.type === 'domain' ? 15 : 11);
@@ -320,90 +340,157 @@ document.addEventListener('DOMContentLoaded', function() {
             circle.setAttribute('stroke-width', '1');
             g.appendChild(circle);
             
-            // Create text label with better contrast
-            // Create a text background for better legibility
-            const textBackground = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            // Only create text if we actually have a name (improved performance)
+            if (node.name) {
+                // Create text label with better contrast
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('dy', '25');
+                text.setAttribute('font-size', '12px');
+                text.setAttribute('fill', '#ffffff');
+                text.setAttribute('font-weight', 'bold');
+                text.setAttribute('stroke', '#000000');
+                text.setAttribute('stroke-width', '0.5');
+                text.setAttribute('paint-order', 'stroke');
+                text.textContent = node.name;
+                g.appendChild(text);
+            }
             
-            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('dy', '25');
-            text.setAttribute('font-size', '12px');
-            text.setAttribute('fill', '#ffffff');
-            text.setAttribute('font-weight', 'bold');
-            text.setAttribute('stroke', '#000000');
-            text.setAttribute('stroke-width', '0.5');
-            text.setAttribute('paint-order', 'stroke');
-            text.textContent = node.name || node.id;
-            g.appendChild(text);
+            return g;
+        }
+        
+        // Process nodes by type for better visual layering
+        // First process non-domains (routes, hosts, etc)
+        nodes.filter(node => node.type !== 'domain').forEach(node => {
+            const nodeElement = createNodeElement(node);
+            nodesGroup.appendChild(nodeElement);
+        });
+        
+        // Then process domains so they appear on top
+        nodes.filter(node => node.type === 'domain').forEach(node => {
+            const nodeElement = createNodeElement(node);
+            nodesGroup.appendChild(nodeElement);
+        });
+        // Add the nodes group to the SVG
+        svg.appendChild(nodesGroup);
+        
+        // Set up dragging behavior for all nodes at once
+        const allNodeElements = nodesGroup.querySelectorAll('g');
+        allNodeElements.forEach(nodeElement => {
+            const nodeId = nodeElement.getAttribute('data-id');
+            const node = nodeMap[nodeId];
             
-            // Make nodes draggable with improved handling
-            // Store the current node in the DOM element for easier access
-            g.node = node;
+            // Store node reference for quick access
+            nodeElement.node = node;
             
-            // Add event listener directly to the node
-            g.addEventListener('mousedown', startDragging);
-            
-            // Function to handle the start of dragging
-            function startDragging(e) {
-                e.preventDefault(); // Prevent text selection during drag
-                e.stopPropagation(); // Prevent event from bubbling
+            // Add drag start listener
+            nodeElement.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 
                 // Set global dragging state
                 window._currentDragNode = node;
                 
                 // Get SVG coordinates of the mouse event
                 const svgPoint = getSVGCoordinates(svg, e.clientX, e.clientY);
-                window._dragOffset = { 
-                    x: svgPoint.x - node.x, 
+                window._dragOffset = {
+                    x: svgPoint.x - node.x,
                     y: svgPoint.y - node.y
                 };
                 
                 // Add dragging class for styling
-                g.classList.add('dragging');
+                nodeElement.classList.add('dragging');
+            });
+        });
+            
+        // Set up global drag handlers if not already done
+        if (!window._dragHandlerAttached) {
+            window._dragHandlerAttached = true;
+            window._isDragging = false;
+            
+            // Throttle function to limit how often a function can run
+            function throttle(callback, limit) {
+                let waiting = false;
+                return function() {
+                    if (!waiting) {
+                        callback.apply(this, arguments);
+                        waiting = true;
+                        setTimeout(function() {
+                            waiting = false;
+                        }, limit);
+                    }
+                };
             }
             
-            // Set up global drag handlers if not already done
-            if (!window._dragHandlerAttached) {
-                window._dragHandlerAttached = true;
-                window._isDragging = false;
-                
-                // Global mousemove handler
-                document.addEventListener('mousemove', (e) => {
-                    // Only process if we have a node being dragged
-                    if (!window._currentDragNode) return;
-                    
-                    window._isDragging = true;
-                    
-                    // Get SVG coordinates of the mouse event
-                    const svgPoint = getSVGCoordinates(svg, e.clientX, e.clientY);
-                    const draggedNode = window._currentDragNode;
-                    
-                    if (draggedNode) {
-                        // Calculate new position with the stored offset
-                        draggedNode.x = ensureNumber(svgPoint.x - window._dragOffset.x);
-                        draggedNode.y = ensureNumber(svgPoint.y - window._dragOffset.y);
-                        
-                        // Keep within bounds with more padding
-                        const padding = 80;
-                        draggedNode.x = Math.max(padding, Math.min(width - padding, draggedNode.x));
-                        draggedNode.y = Math.max(padding, Math.min(height - padding, draggedNode.y));
-                        
-                        // Update visualization without rerunning simulation
-                        createVisualization();
+            // Throttled version of createVisualization for better performance
+            const throttledUpdate = throttle(function() {
+                // Only update node positions without full re-render
+                document.querySelectorAll('.nodes-group g').forEach(nodeEl => {
+                    const node = nodeEl.node;
+                    if (node) {
+                        nodeEl.setAttribute('transform', `translate(${node.x}, ${node.y})`);
                     }
                 });
                 
-                // Global mouseup handler
-                document.addEventListener('mouseup', () => {
-                    // Clear dragging state
-                    window._currentDragNode = null;
-                    window._dragOffset = null;
-                    window._isDragging = false;
+                // Update lines
+                const lines = document.querySelectorAll('.links-group line');
+                links.forEach((link, index) => {
+                    if (index < lines.length) {
+                        const sourceNode = nodeMap[link.source];
+                        const targetNode = nodeMap[link.target];
+                        if (sourceNode && targetNode) {
+                            lines[index].setAttribute('x1', sourceNode.x);
+                            lines[index].setAttribute('y1', sourceNode.y);
+                            lines[index].setAttribute('x2', targetNode.x);
+                            lines[index].setAttribute('y2', targetNode.y);
+                        }
+                    }
+                });
+            }, 30);  // 30ms throttle for smoother performance
+            
+            // Global mousemove handler with throttling
+            document.addEventListener('mousemove', (e) => {
+                // Only process if we have a node being dragged
+                if (!window._currentDragNode) return;
+                
+                window._isDragging = true;
+                
+                // Get SVG coordinates of the mouse event
+                const svgPoint = getSVGCoordinates(svg, e.clientX, e.clientY);
+                const draggedNode = window._currentDragNode;
+                
+                if (draggedNode) {
+                    // Calculate new position with the stored offset
+                    draggedNode.x = ensureNumber(svgPoint.x - window._dragOffset.x);
+                    draggedNode.y = ensureNumber(svgPoint.y - window._dragOffset.y);
                     
-                    // Remove visual indicators
-                    document.querySelectorAll('.dragging').forEach(el => {
-                        el.classList.remove('dragging');
-                    });
+                    // Keep within bounds with more padding
+                    const padding = 80;
+                    draggedNode.x = Math.max(padding, Math.min(width - padding, draggedNode.x));
+                    draggedNode.y = Math.max(padding, Math.min(height - padding, draggedNode.y));
+                    
+                    // Update only node positions without full re-render
+                    throttledUpdate();
+                }
+            });
+            
+            // Global mouseup handler
+            document.addEventListener('mouseup', () => {
+                // Only process if we were dragging
+                if (window._currentDragNode) {
+                    // A full re-render once dragging ends
+                    createVisualization();
+                }
+                
+                // Clear dragging state
+                window._currentDragNode = null;
+                window._dragOffset = null;
+                window._isDragging = false;
+                
+                // Remove visual indicators
+                document.querySelectorAll('.dragging').forEach(el => {
+                    el.classList.remove('dragging');
+                });
                 });
             }
             
@@ -537,33 +624,69 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Run force simulation with gradual slowdown
-        let iteration = 0;
-        const maxIterations = 40; // Reduced from 60 for less simulation time
-        const minDelay = 30; // Minimum delay between iterations to slow down
+        // Perform initial layout with fixed number of iterations instead of animation
+        // This is much more efficient as it does all calculations at once
+        for (let i = 0; i < 20; i++) {
+            applyForces();
+        }
         
-        function runSimulation() {
-            if (iteration < maxIterations) {
-                // Apply forces with gradually decreasing strength
-                applyForces();
-                iteration++;
-                
-                // Gradually increase delay to slow down the simulation
-                const delay = minDelay + Math.min(100, iteration * 3);
-                setTimeout(runSimulation, delay);
-            } else {
-                // After simulation finishes, make sure all nodes are still draggable
-                ensureDraggable();
+        // Final visualization after initial forces are applied
+        createVisualization();
+        
+        // Set up lightweight animation for responsiveness during interaction
+        setupInteractiveForces();
+    }
+    
+    // Set up interaction forces that only run when needed
+    function setupInteractiveForces() {
+        // We'll use requestAnimationFrame for smoother animation
+        let animationFrameId = null;
+        let lastInteractionTime = Date.now();
+        const interactionTimeout = 2000; // Stop animation 2 seconds after last interaction
+        
+        // Function to apply forces and schedule next frame if needed
+        function animateForces() {
+            // Check if we should stop animation (no recent interaction)
+            if (Date.now() - lastInteractionTime > interactionTimeout) {
+                animationFrameId = null;
+                return;
             }
-        }
-        
-        // Ensure all nodes are properly set up for dragging
-        function ensureDraggable() {
-            // Refresh the visualization to ensure all nodes have event listeners
+            
+            // Apply a single iteration of forces
+            applyForces();
+            
+            // Update visualization
             createVisualization();
+            
+            // Schedule next frame
+            animationFrameId = requestAnimationFrame(animateForces);
         }
         
-        runSimulation();
+        // Start animation when a node is dragged
+        document.addEventListener('mousemove', function() {
+            if (window._currentDragNode) {
+                // Update last interaction time
+                lastInteractionTime = Date.now();
+                
+                // Start animation if not already running
+                if (!animationFrameId) {
+                    animationFrameId = requestAnimationFrame(animateForces);
+                }
+            }
+        });
+        
+        // Also start animation when a node is released
+        document.addEventListener('mouseup', function() {
+            if (window._isDragging) {
+                // Update last interaction time
+                lastInteractionTime = Date.now();
+                
+                // Start animation if not already running
+                if (!animationFrameId) {
+                    animationFrameId = requestAnimationFrame(animateForces);
+                }
+            }
+        });
     }
     
     // Start with a better layout
