@@ -493,25 +493,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             });
         }
+        
+        // Helper function to get SVG coordinates from client coordinates
+        function getSVGCoordinates(svgElement, x, y) {
+            const point = svgElement.createSVGPoint();
+            point.x = x;
+            point.y = y;
             
-            // Helper function to get SVG coordinates from client coordinates
-            function getSVGCoordinates(svgElement, x, y) {
-                const point = svgElement.createSVGPoint();
-                point.x = x;
-                point.y = y;
-                
-                // Convert to SVG coordinate system
-                const ctm = svgElement.getScreenCTM();
-                if (ctm) {
-                    return point.matrixTransform(ctm.inverse());
-                }
-                
-                // Fallback if getScreenCTM fails
-                return { x, y };
+            // Convert to SVG coordinate system
+            const ctm = svgElement.getScreenCTM();
+            if (ctm) {
+                return point.matrixTransform(ctm.inverse());
             }
             
-            svg.appendChild(g);
-        });
+            // Fallback if getScreenCTM fails
+            return { x, y };
+        }
+    }
     }
     
     // Initial creation
