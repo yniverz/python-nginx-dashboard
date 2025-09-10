@@ -2,18 +2,6 @@
 {% block content %}
 <h2>Welcome to the Multi-Domain Edge Manager!</h2>
 
-<!-- Debug Information -->
-<details>
-    <summary>Debug Information (Click to expand)</summary>
-    <div class="debug-info">
-        <h4>Type Information:</h4>
-        <pre>{{ visualization_data.debug.types|pprint }}</pre>
-        
-        <h4>Sample Values:</h4>
-        <pre>{{ visualization_data.debug.sample_values|pprint }}</pre>
-    </div>
-</details>
-
 <!-- Publish Button -->
 <div class="action-buttons">
     <a href="{{ url_for('view_publish') }}" class="btn btn-primary">Publish Changes</a>
@@ -64,53 +52,22 @@
                 <tr>
                     <td>{{ domain.name }}</td>
                     <td>
-                        <!-- Debug info for domain ID -->
-                        Domain ID type: {{ domain.id.__class__.__name__ }} Value: {{ domain.id }}
-                        <br>
-                        <!-- Use same list-based counting approach -->
                         {% set matching_records = [] %}
                         {% for d in visualization_data.dns_records %}
-                            <!-- Debug first few records -->
-                            {% if loop.index <= 2 %}
-                                <small>[Record {{ loop.index }}: ID type: {{ d.domain_id.__class__.__name__ }} Value: {{ d.domain_id }}]</small><br>
-                            {% endif %}
-                            
-                            <!-- Try multiple comparison methods and collect matches -->
                             {% if d.domain_id|int == domain.id|int %}
                                 {% set _ = matching_records.append(d) %}
                             {% endif %}
                         {% endfor %}
-                        <strong>{{ matching_records|length }} record(s)</strong>
+                        <strong>{{ matching_records|length }}</strong>
                     </td>
                     <td>
-                        <!-- Count routes using a direct approach -->
                         {% set matching_routes = [] %}
                         {% for r in visualization_data.routes %}
                             {% if r.domain_id|int == domain.id|int %}
                                 {% set _ = matching_routes.append(r) %}
                             {% endif %}
                         {% endfor %}
-                        
-                        <!-- Display count and details -->
-                        <details>
-                            <summary><strong>{{ matching_routes|length }} route(s)</strong></summary>
-                            {% for r in visualization_data.routes %}
-                                <div style="font-size: 12px; border-bottom: 1px solid #eee; padding: 5px 0;">
-                                    Route: {{ r.subdomain }}, domain_id: {{ r.domain_id }} ({{ r.domain_id.__class__.__name__ }})<br>
-                                    Current domain id: {{ domain.id }} ({{ domain.id.__class__.__name__ }})<br>
-                                    
-                                    <!-- Test different comparisons -->
-                                    == comparison: {% if r.domain_id == domain.id %}✅{% else %}❌{% endif %}<br>
-                                    String comparison: {% if r.domain_id|string == domain.id|string %}✅{% else %}❌{% endif %}<br>
-                                    Integer comparison: {% if r.domain_id|int == domain.id|int %}✅{% else %}❌{% endif %}
-                                    
-                                    <!-- Highlight if matched -->
-                                    {% if r.domain_id|int == domain.id|int %}
-                                        <div style="color: green; font-weight: bold;">MATCHED!</div>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        </details>
+                        <strong>{{ matching_routes|length }}</strong>
                     </td>
                 </tr>
                 {% endfor %}
@@ -172,14 +129,8 @@ document.addEventListener('DOMContentLoaded', function() {
         gatewayServers: {{ visualization_data.gateway_servers|tojson|safe }},
         gatewayClients: {{ visualization_data.gateway_clients|tojson|safe }},
         gatewayConnections: {{ visualization_data.gateway_connections|tojson|safe }},
-        localIp: {{ visualization_data.local_ip|tojson|safe }},
-        debug: {{ visualization_data.debug|tojson|safe }}
+        localIp: {{ visualization_data.local_ip|tojson|safe }}
     };
-    
-    // Log some debug info to browser console
-    console.log('Debug info:', visualizationData.debug);
-    console.log('Sample domain:', visualizationData.domains[0]);
-    console.log('Sample route:', visualizationData.routes[0]);
     
     // Network graph container
     const container = document.getElementById('networkGraph');
@@ -218,12 +169,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Find matching domain using numeric comparison
         const matchingDomain = visualizationData.domains.find(d => parseInt(d.id, 10) === routeDomainId);
-        
-        console.log('Route domain matching:', { 
-            routeDomainId, 
-            matchingDomain: matchingDomain ? matchingDomain.id : 'not found',
-            domainName: matchingDomain ? matchingDomain.name : 'unknown'
-        });
         
         nodes.push({
             id: routeId,

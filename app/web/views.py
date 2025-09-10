@@ -134,12 +134,6 @@ def prepare_visualization_data(data_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     result = {}
     
-    # Add debug object to help troubleshoot in the template
-    debug_info = {
-        "types": {},
-        "sample_values": {}
-    }
-    
     for key, value in data_dict.items():
         # Handle simple values
         if isinstance(value, (str, int, float, bool)) or value is None:
@@ -148,17 +142,6 @@ def prepare_visualization_data(data_dict: Dict[str, Any]) -> Dict[str, Any]:
             
         # Handle lists
         if isinstance(value, list):
-            # Add type information to debug
-            if value and key in ['domains', 'routes', 'dns_records']:
-                sample_item = value[0] if value else None
-                if sample_item:
-                    debug_info["types"][key] = str(type(sample_item))
-                    if hasattr(sample_item, 'id'):
-                        debug_info["sample_values"][f"{key}_id"] = {
-                            "type": str(type(sample_item.id)),
-                            "value": sample_item.id
-                        }
-            
             # Process each item in the list
             processed_items = []
             for item in value:
@@ -180,9 +163,6 @@ def prepare_visualization_data(data_dict: Dict[str, Any]) -> Dict[str, Any]:
             
         # Other types, just pass through
         result[key] = value
-    
-    # Add debug info to result
-    result["debug"] = debug_info
             
     return result
 
