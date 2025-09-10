@@ -148,14 +148,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const nodes = [];
     const links = [];
     
-    // Add domain nodes
-    visualizationData.domains.forEach(domain => {
+    // Add domain nodes with more strategic initial positioning
+    const domainCount = visualizationData.domains.length;
+    visualizationData.domains.forEach((domain, index) => {
+        // Position domains in a circle in the center
+        const angle = (index / domainCount) * 2 * Math.PI;
+        const radius = Math.min(width, height) * 0.3;
+        const x = width/2 + radius * Math.cos(angle);
+        const y = height/2 + radius * Math.sin(angle);
+        
         nodes.push({
             id: `domain-${domain.id}`,
             type: 'domain',
             name: domain.name,
-            x: Math.random() * width,
-            y: Math.random() * height,
+            x: x,
+            y: y,
             color: '#3498db'
         });
     });
@@ -170,15 +177,34 @@ document.addEventListener('DOMContentLoaded', function() {
         // Find matching domain using numeric comparison
         const matchingDomain = visualizationData.domains.find(d => parseInt(d.id, 10) === routeDomainId);
         
-        nodes.push({
-            id: routeId,
-            type: 'route',
-            name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
-            x: Math.random() * width,
-            y: Math.random() * height,
-            color: '#2ecc71',
-            domainId: routeDomainId  // Store for reference
-        });
+        // Find the domain node for positioning routes around it
+        const domainNodeIndex = nodes.findIndex(n => n.id === `domain-${routeDomainId}`);
+        if (domainNodeIndex >= 0) {
+            const domainNode = nodes[domainNodeIndex];
+            // Calculate position near its domain with some randomness
+            const angle = Math.random() * 2 * Math.PI;
+            const distance = 60 + Math.random() * 40; // 60-100 pixels from domain
+            nodes.push({
+                id: routeId,
+                type: 'route',
+                name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
+                x: domainNode.x + distance * Math.cos(angle),
+                y: domainNode.y + distance * Math.sin(angle),
+                color: '#2ecc71',
+                domainId: routeDomainId  // Store for reference
+            });
+        } else {
+            // Fallback if domain node not found
+            nodes.push({
+                id: routeId,
+                type: 'route',
+                name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
+                x: width/2 + (Math.random() - 0.5) * width * 0.5,
+                y: height/2 + (Math.random() - 0.5) * height * 0.5,
+                color: '#2ecc71',
+                domainId: routeDomainId  // Store for reference
+            });
+        }
         
         links.push({
             source: domainNode,
@@ -193,14 +219,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Check if the host matches the local IP
                 const isLocalHost = host.host.includes(visualizationData.localIp);
                 
-                nodes.push({
-                    id: hostId,
-                    type: 'host',
-                    name: host.host,
-                    x: Math.random() * width,
-                    y: Math.random() * height,
-                    color: isLocalHost ? '#e74c3c' : '#f39c12'
-                });
+                // Find the route node for positioning hosts around it
+                const routeNodeIndex = nodes.findIndex(n => n.id === routeId);
+                if (routeNodeIndex >= 0) {
+                    const routeNode = nodes[routeNodeIndex];
+                    // Calculate position near its route with some randomness
+                    const angle = Math.random() * 2 * Math.PI;
+                    const distance = 50 + Math.random() * 30; // 50-80 pixels from route
+                    nodes.push({
+                        id: hostId,
+                        type: 'host',
+                        name: host.host,
+                        x: routeNode.x + distance * Math.cos(angle),
+                        y: routeNode.y + distance * Math.sin(angle),
+                        color: isLocalHost ? '#e74c3c' : '#f39c12'
+                    });
+                } else {
+                    // Fallback if route node not found
+                    nodes.push({
+                        id: hostId,
+                        type: 'host',
+                        name: host.host,
+                        x: width/2 + (Math.random() - 0.5) * width * 0.5,
+                        y: height/2 + (Math.random() - 0.5) * height * 0.5,
+                        color: isLocalHost ? '#e74c3c' : '#f39c12'
+                    });
+                }
                 
                 links.push({
                     source: routeId,
@@ -243,8 +287,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 line.setAttribute('y1', y1);
                 line.setAttribute('x2', x2);
                 line.setAttribute('y2', y2);
-                line.setAttribute('stroke', '#aaa');
+                line.setAttribute('stroke', '#6c757d');
                 line.setAttribute('stroke-width', '2');
+                line.setAttribute('stroke-opacity', '0.7');
                 svg.appendChild(line);
             }
         });
@@ -259,15 +304,32 @@ document.addEventListener('DOMContentLoaded', function() {
             g.setAttribute('transform', `translate(${x}, ${y})`);
             g.setAttribute('data-id', node.id);
             
+            // Create node circle with a glowing effect
+            const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            glow.setAttribute('r', node.type === 'domain' ? 14 : 10);
+            glow.setAttribute('fill', 'none');
+            glow.setAttribute('stroke', node.color);
+            glow.setAttribute('stroke-width', '2');
+            glow.setAttribute('stroke-opacity', '0.5');
+            glow.setAttribute('filter', 'blur(3px)');
+            g.appendChild(glow);
+            
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('r', node.type === 'domain' ? 12 : 8);
             circle.setAttribute('fill', node.color);
+            circle.setAttribute('stroke', '#ffffff');
+            circle.setAttribute('stroke-width', '1');
             g.appendChild(circle);
             
+            // Create text label with better contrast
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dy', '25');
             text.setAttribute('font-size', '12px');
+            text.setAttribute('fill', '#ffffff');
+            text.setAttribute('stroke', '#000000');
+            text.setAttribute('stroke-width', '0.5');
+            text.setAttribute('paint-order', 'stroke');
             text.textContent = node.name || node.id;
             g.appendChild(text);
             
@@ -345,10 +407,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial creation
     createVisualization();
     
-    // Simple force simulation to prevent overlap
+    // Advanced force simulation to create a well-distributed layout
     function applyForces() {
-        const repulsion = 100;
-        const attraction = 0.1;
+        // Apply repulsion force to separate nodes - stronger for different node types
+        const baseRepulsion = 150; // Increased from 100
+        const domainRepulsion = 200; // Domains need more space
+        const attraction = 0.05; // Reduced from 0.1 for less bunching
         
         for (let i = 0; i < nodes.length; i++) {
             // Ensure nodes have valid positions
@@ -364,8 +428,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const dy = nodes[j].y - nodes[i].y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
+                // Use different repulsion strengths based on node types
+                let repulsion = baseRepulsion;
+                if (nodes[i].type === 'domain' || nodes[j].type === 'domain') {
+                    repulsion = domainRepulsion; // Stronger repulsion for domains
+                }
+                
                 if (dist > 0 && dist < repulsion) { // Avoid division by zero
-                    const force = (repulsion - dist) / dist;
+                    // Quadratic force for more natural spacing
+                    const force = (repulsion - dist) * (repulsion - dist) / (repulsion * dist);
                     nodes[i].x -= dx * force * 0.5;
                     nodes[i].y -= dy * force * 0.5;
                     nodes[j].x += dx * force * 0.5;
@@ -384,21 +455,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 const dy = targetNode.y - sourceNode.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
+                // Ideal distance between connected nodes
+                const idealDistance = 80;
+                
                 if (dist > 0) { // Avoid division by zero
-                    const force = dist * attraction;
-                    
-                    sourceNode.x += dx * force;
-                    sourceNode.y += dy * force;
-                    targetNode.x -= dx * force;
-                    targetNode.y -= dy * force;
+                    // Only attract if distance is too large
+                    if (dist > idealDistance) {
+                        const force = (dist - idealDistance) * attraction / dist;
+                        sourceNode.x += dx * force;
+                        sourceNode.y += dy * force;
+                        targetNode.x -= dx * force;
+                        targetNode.y -= dy * force;
+                    }
                 }
             }
         });
         
-        // Keep nodes within bounds and ensure valid values
+        // Center force - gently pull nodes toward the center if they're far out
+        const centerForce = 0.01;
         nodes.forEach(node => {
-            node.x = Math.max(50, Math.min(width - 50, ensureNumber(node.x, width/2)));
-            node.y = Math.max(50, Math.min(height - 50, ensureNumber(node.y, height/2)));
+            const dx = width/2 - node.x;
+            const dy = height/2 - node.y;
+            const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+            
+            if (distFromCenter > width/3) {
+                node.x += dx * centerForce;
+                node.y += dy * centerForce;
+            }
+        });
+        
+        // Keep nodes within bounds and ensure valid values with padding
+        const padding = 80; // Increased from 50
+        nodes.forEach(node => {
+            node.x = Math.max(padding, Math.min(width - padding, ensureNumber(node.x, width/2)));
+            node.y = Math.max(padding, Math.min(height - padding, ensureNumber(node.y, height/2)));
         });
         
         createVisualization();
@@ -423,13 +513,23 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Run force simulation gradually with damping
         let iteration = 0;
-        const maxIterations = 30;
+        const maxIterations = 60; // Increased from 30 for better stabilization
         
         function runSimulation() {
             if (iteration < maxIterations) {
+                // Apply cooling factor to gradually reduce forces as simulation progresses
+                const coolingFactor = 1 - (iteration / maxIterations); 
+                
+                // Modify force strength with cooling
+                baseRepulsion = baseRepulsion * (0.9 + coolingFactor * 0.1);
+                domainRepulsion = domainRepulsion * (0.9 + coolingFactor * 0.1);
+                
                 applyForces();
                 iteration++;
-                requestAnimationFrame(runSimulation);
+                
+                // Use slower animation frames for later iterations to let things settle
+                const delay = Math.min(50, iteration / 2);
+                setTimeout(runSimulation, delay);
             }
         }
         
@@ -478,17 +578,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .visualization-container {
     margin: 30px 0;
-    background-color: #f8f9fa;
+    background-color: #2c3e50;
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    color: #ffffff;
 }
 
 .network-graph {
     height: 500px;
-    border: 1px solid #ddd;
+    border: 1px solid #2c3e50;
     border-radius: 4px;
-    background-color: white;
+    background-color: #212529;
+    color: #ffffff;
 }
 
 .overview-tables {
@@ -515,12 +617,14 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .data-table th {
-    background-color: #f2f2f2;
+    background-color: #2c3e50;
+    color: #ffffff;
     font-weight: bold;
 }
 
 .data-table tr:hover {
-    background-color: #f5f5f5;
+    background-color: #3a4d61;
+    color: #ffffff;
 }
 
 /* Responsive adjustments */
