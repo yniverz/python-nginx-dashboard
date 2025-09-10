@@ -27,11 +27,20 @@ from app.services.common import JOB_RUNNING, get_job_result, propagate_changes, 
 # Template directory for Jinja2 templates
 ROOT = (Path(__file__).resolve().parent / "templates").resolve()
 
+# Define a custom JSON encoder to handle SQLAlchemy models
+class ModelEncoder(json.JSONEncoder):
+    def default(self, obj):
+        # Handle dates and times
+        if isinstance(obj, (datetime, )):
+            return obj.isoformat()
+        # Return serializable objects as-is
+        return json.JSONEncoder.default(self, obj)
+
 # Let's use FastAPI's standard Jinja2Templates for proper integration
 templates = Jinja2Templates(directory=ROOT)
 
 # Add custom JSON filter directly
-templates.env.filters["tojson"] = lambda obj: json.dumps(obj)
+templates.env.filters["tojson"] = lambda obj: json.dumps(obj, cls=ModelEncoder)
 
 # Note: Don't override templates.env completely, as it contains necessary context functions
 # like url_for that are added by FastAPI/Starlette
@@ -69,9 +78,33 @@ def model_to_dict(obj: Any) -> Dict:
     Convert SQLAlchemy model to dictionary for JSON serialization.
     Handles enum values and relationships.
     """
+    if obj is None:
+        return None
+        
     if isinstance(obj, Enum):
         return obj.value
     
+    # For SQLAlchemy models
+    if hasattr(obj, '__table__'):
+        result = {}
+        # Get column attributes directly from the table
+        for column in obj.__table__.columns:
+            value = getattr(obj, column.name)
+            if isinstance(value, Enum):
+                result[column.name] = value.value
+            else:
+                result[column.name] = value
+                
+        # Add additional relationship IDs for reference
+        for relationship_name in obj.__mapper__.relationships.keys():
+            related_obj = getattr(obj, relationship_name, None)
+            if related_obj is not None:
+                if hasattr(obj, f"{relationship_name}_id"):
+                    result[f"{relationship_name}_id"] = getattr(obj, f"{relationship_name}_id")
+        
+        return result
+    
+    # For other objects
     result = {}
     for key in dir(obj):
         if not key.startswith('_') and key not in ('metadata', 'registry'):
@@ -87,21 +120,42 @@ def model_to_dict(obj: Any) -> Dict:
                 result[key] = value
     return result
 
-def prepare_visualization_data(data_dict: Dict[str, List]) -> Dict[str, List]:
+def prepare_visualization_data(data_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Convert SQLAlchemy models to dictionaries for JSON serialization in templates.
+    Handles nested structures like routes with hosts.
     """
     result = {}
-    for key, items in data_dict.items():
-        if key == "local_ip":
-            result[key] = data_dict[key]  # Pass through string value
+    for key, value in data_dict.items():
+        # Handle simple values
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            result[key] = value
             continue
             
-        if not isinstance(items, list):
-            result[key] = items
+        # Handle lists
+        if isinstance(value, list):
+            # Process each item in the list
+            processed_items = []
+            for item in value:
+                processed_item = model_to_dict(item)
+                
+                # Special handling for routes with hosts
+                if key == "routes" and hasattr(item, "hosts") and item.hosts:
+                    processed_item["hosts"] = [model_to_dict(host) for host in item.hosts]
+                
+                processed_items.append(processed_item)
+            
+            result[key] = processed_items
             continue
             
-        result[key] = [model_to_dict(item) for item in items]
+        # Handle SQLAlchemy models
+        if hasattr(value, "__table__"):
+            result[key] = model_to_dict(value)
+            continue
+            
+        # Other types, just pass through
+        result[key] = value
+            
     return result
 
 def authenticate(db: Session, username: str, password: str):
