@@ -204,6 +204,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Helper function to ensure valid number (avoid NaN)
+    function ensureNumber(val, defaultVal = 0) {
+        return (typeof val === 'number' && !isNaN(val)) ? val : defaultVal;
+    }
+    
+    // Initialize all node positions if not already set
+    nodes.forEach(node => {
+        node.x = ensureNumber(node.x, Math.random() * width);
+        node.y = ensureNumber(node.y, Math.random() * height);
+    });
+    
     // Function to create the visualization
     function createVisualization() {
         // Clear SVG
@@ -215,11 +226,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const targetNode = nodes.find(n => n.id === link.target);
             
             if (sourceNode && targetNode) {
+                // Ensure valid coordinates
+                const x1 = ensureNumber(sourceNode.x);
+                const y1 = ensureNumber(sourceNode.y);
+                const x2 = ensureNumber(targetNode.x);
+                const y2 = ensureNumber(targetNode.y);
+                
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', sourceNode.x);
-                line.setAttribute('y1', sourceNode.y);
-                line.setAttribute('x2', targetNode.x);
-                line.setAttribute('y2', targetNode.y);
+                line.setAttribute('x1', x1);
+                line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2);
+                line.setAttribute('y2', y2);
                 line.setAttribute('stroke', '#aaa');
                 line.setAttribute('stroke-width', '2');
                 svg.appendChild(line);
@@ -228,8 +245,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Create nodes
         nodes.forEach(node => {
+            // Ensure valid coordinates
+            const x = ensureNumber(node.x);
+            const y = ensureNumber(node.y);
+            
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+            g.setAttribute('transform', `translate(${x}, ${y})`);
+            g.setAttribute('data-id', node.id);
             
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('r', node.type === 'domain' ? 12 : 8);
@@ -240,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dy', '25');
             text.setAttribute('font-size', '12px');
-            text.textContent = node.name;
+            text.textContent = node.name || node.id;
             g.appendChild(text);
             
             // Make nodes draggable
@@ -248,22 +270,67 @@ document.addEventListener('DOMContentLoaded', function() {
             let offset = { x: 0, y: 0 };
             
             g.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // Prevent text selection during drag
                 isDragging = true;
-                offset.x = e.clientX - node.x;
-                offset.y = e.clientY - node.y;
+                
+                // Get SVG coordinates of the mouse event
+                const svgPoint = getSVGCoordinates(svg, e.clientX, e.clientY);
+                offset.x = svgPoint.x - node.x;
+                offset.y = svgPoint.y - node.y;
+                
+                // Add dragging class for styling
+                g.classList.add('dragging');
             });
             
-            document.addEventListener('mousemove', (e) => {
-                if (isDragging) {
-                    node.x = e.clientX - offset.x;
-                    node.y = e.clientY - offset.y;
-                    createVisualization();
+            // Use one global event listener for mousemove
+            if (!window._dragHandlerAttached) {
+                window._dragHandlerAttached = true;
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    // Get SVG coordinates of the mouse event
+                    const svgPoint = getSVGCoordinates(svg, e.clientX, e.clientY);
+                    const draggedNodeId = e.target.closest('g')?.getAttribute('data-id');
+                    
+                    // Find the node being dragged
+                    const draggedNode = nodes.find(n => n.id === draggedNodeId);
+                    
+                    if (draggedNode) {
+                        draggedNode.x = ensureNumber(svgPoint.x - offset.x);
+                        draggedNode.y = ensureNumber(svgPoint.y - offset.y);
+                        
+                        // Keep within bounds
+                        draggedNode.x = Math.max(50, Math.min(width - 50, draggedNode.x));
+                        draggedNode.y = Math.max(50, Math.min(height - 50, draggedNode.y));
+                        
+                        createVisualization();
+                    }
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    document.querySelectorAll('.dragging').forEach(el => {
+                        el.classList.remove('dragging');
+                    });
+                });
+            }
+            
+            // Helper function to get SVG coordinates from client coordinates
+            function getSVGCoordinates(svgElement, x, y) {
+                const point = svgElement.createSVGPoint();
+                point.x = x;
+                point.y = y;
+                
+                // Convert to SVG coordinate system
+                const ctm = svgElement.getScreenCTM();
+                if (ctm) {
+                    return point.matrixTransform(ctm.inverse());
                 }
-            });
-            
-            document.addEventListener('mouseup', () => {
-                isDragging = false;
-            });
+                
+                // Fallback if getScreenCTM fails
+                return { x, y };
+            }
             
             svg.appendChild(g);
         });
@@ -278,12 +345,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const attraction = 0.1;
         
         for (let i = 0; i < nodes.length; i++) {
+            // Ensure nodes have valid positions
+            nodes[i].x = ensureNumber(nodes[i].x, width / 2);
+            nodes[i].y = ensureNumber(nodes[i].y, height / 2);
+            
             for (let j = i + 1; j < nodes.length; j++) {
+                // Ensure nodes have valid positions
+                nodes[j].x = ensureNumber(nodes[j].x, width / 2);
+                nodes[j].y = ensureNumber(nodes[j].y, height / 2);
+                
                 const dx = nodes[j].x - nodes[i].x;
                 const dy = nodes[j].y - nodes[i].y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
-                if (dist < repulsion) {
+                if (dist > 0 && dist < repulsion) { // Avoid division by zero
                     const force = (repulsion - dist) / dist;
                     nodes[i].x -= dx * force * 0.5;
                     nodes[i].y -= dy * force * 0.5;
@@ -303,28 +378,60 @@ document.addEventListener('DOMContentLoaded', function() {
                 const dy = targetNode.y - sourceNode.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
-                const force = dist * attraction;
-                
-                sourceNode.x += dx * force;
-                sourceNode.y += dy * force;
-                targetNode.x -= dx * force;
-                targetNode.y -= dy * force;
+                if (dist > 0) { // Avoid division by zero
+                    const force = dist * attraction;
+                    
+                    sourceNode.x += dx * force;
+                    sourceNode.y += dy * force;
+                    targetNode.x -= dx * force;
+                    targetNode.y -= dy * force;
+                }
             }
         });
         
-        // Keep nodes within bounds
+        // Keep nodes within bounds and ensure valid values
         nodes.forEach(node => {
-            node.x = Math.max(50, Math.min(width - 50, node.x));
-            node.y = Math.max(50, Math.min(height - 50, node.y));
+            node.x = Math.max(50, Math.min(width - 50, ensureNumber(node.x, width/2)));
+            node.y = Math.max(50, Math.min(height - 50, ensureNumber(node.y, height/2)));
         });
         
         createVisualization();
     }
     
-    // Run force simulation a few times
-    for (let i = 0; i < 50; i++) {
-        applyForces();
+    // Distribute nodes in initial positions
+    function initialLayout() {
+        const domainCount = nodes.filter(n => n.type === 'domain').length;
+        const angleStep = (2 * Math.PI) / Math.max(1, domainCount);
+        
+        // Position domains in a circle
+        let domainIndex = 0;
+        nodes.forEach(node => {
+            if (node.type === 'domain') {
+                const radius = Math.min(width, height) * 0.3;
+                const angle = domainIndex * angleStep;
+                node.x = width/2 + radius * Math.cos(angle);
+                node.y = height/2 + radius * Math.sin(angle);
+                domainIndex++;
+            }
+        });
+        
+        // Run force simulation gradually with damping
+        let iteration = 0;
+        const maxIterations = 30;
+        
+        function runSimulation() {
+            if (iteration < maxIterations) {
+                applyForces();
+                iteration++;
+                requestAnimationFrame(runSimulation);
+            }
+        }
+        
+        runSimulation();
     }
+    
+    // Start with a better layout
+    initialLayout();
 });
 </script>
 
