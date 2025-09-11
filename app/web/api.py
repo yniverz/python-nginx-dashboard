@@ -23,10 +23,14 @@ def get_gateway_server(server_id: str, request: Request, db: Session = Depends(g
     """
     # Access request domain information
     host = request.headers.get("host")  # Gets the Host header which includes domain:port
-    # Alternatively you can access full URL: request.url.hostname
     
-    # Log or use the domain information as needed
-    print(f"Request received from domain: {host}")
+    # Get the base request URI without query parameters
+    scheme = request.url.scheme  # http or https
+    path = request.url.path  # The path component of the URL
+    
+    # Construct the full URI without query parameters
+    base_uri = f"{scheme}://{host}{path}"
+    print(f"Request URI without query params: {base_uri}")
     
     # Validate authentication token
     if not x_gateway_token:
@@ -53,10 +57,14 @@ def get_gateway_client(client_id: str, request: Request, db: Session = Depends(g
     """
     # Access request domain information
     host = request.headers.get("host")  # Gets the Host header which includes domain:port
-    # You can also get just the hostname: request.url.hostname
     
-    # Log or use the domain information as needed
-    print(f"Request received from domain: {host}")
+    # Get the base request URI without query parameters
+    scheme = request.url.scheme  # http or https
+    path = request.url.path  # The path component of the URL
+    
+    # Construct the full URI without query parameters
+    base_uri = f"{scheme}://{host}{path}"
+    print(f"Request URI without query params: {base_uri}")
     
     # Validate authentication token
     if not x_gateway_token:
