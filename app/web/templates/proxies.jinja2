@@ -84,7 +84,7 @@
                 <td>{{ client.name }}</td>
                 <td>{{ client.server.name }}</td>
                 <td>{{ client.is_origin }}</td>
-                <td>
+                <td {% if client.last_config_pull_url %}title="{{ client.last_config_pull_url }}"{% endif %}>
                     {% if client.last_config_pull_time %}
                         {{ (now - client.last_config_pull_time).total_seconds() | round(0) }} seconds ago
                     {% else %}
@@ -130,7 +130,7 @@
                 <td>{{ server.host }}</td>
                 <td>{{ server.bind_port }}</td>
                 {% if server.last_config_pull_time %}
-                    <td>{{ (now - server.last_config_pull_time).total_seconds() | round(0) }} seconds ago</td>
+                    <td {% if server.last_config_pull_url %}title="{{ server.last_config_pull_url }}"{% endif %}>{{ (now - server.last_config_pull_time).total_seconds() | round(0) }} seconds ago</td>
                 {% else %}
                     <td>N/A</td>
                 {% endif %}
