@@ -80,6 +80,7 @@ class GatewayServer(Base):
     bind_port: Mapped[int] = mapped_column(Integer)  # Port for client connections
     auth_token: Mapped[str] = mapped_column(String(128))  # Authentication token
     last_config_pull_time: Mapped[datetime | None] = mapped_column(DateTime)  # Last config fetch
+    last_config_pull_url: Mapped[str | None] = mapped_column(String(512))  # URL used for last config fetch
 
 class GatewayClient(Base):
     """FRP gateway client configuration."""
@@ -89,6 +90,7 @@ class GatewayClient(Base):
     server_id: Mapped[int] = mapped_column(ForeignKey("gateway_servers.id"))
     is_origin: Mapped[bool] = mapped_column(Boolean, default=False)  # Is this an origin server?
     last_config_pull_time: Mapped[datetime | None] = mapped_column(DateTime)
+    last_config_pull_url: Mapped[str | None] = mapped_column(String(512))  # URL used for last config fetch
 
     server: Mapped[GatewayServer] = relationship(backref="clients", lazy="joined")
 

@@ -43,8 +43,9 @@ def get_gateway_server(server_id: str, request: Request, db: Session = Depends(g
     if x_gateway_token != server.auth_token:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Update last config pull time
+    # Update last config pull time and URL
     server.last_config_pull_time = datetime.now(timezone.utc)
+    server.last_config_pull_url = base_uri
     db.commit()
 
     return PlainTextResponse(generate_server_toml(server))
@@ -77,8 +78,9 @@ def get_gateway_client(client_id: str, request: Request, db: Session = Depends(g
     if x_gateway_token != client.server.auth_token:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Update last config pull time
+    # Update last config pull time and URL
     client.last_config_pull_time = datetime.now(timezone.utc)
+    client.last_config_pull_url = base_uri
     db.commit()
 
     return PlainTextResponse(generate_client_toml(db, client))
