@@ -30,6 +30,24 @@
 <!-- Network Visualization -->
 <div class="visualization-container">
     <h3>Network Visualization</h3>
+    <div class="visualization-legend">
+        <div class="legend-item">
+            <div class="legend-icon" style="background-color: #3498db; border-radius: 50%;"></div>
+            <div class="legend-label">Domain</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background-color: #2ecc71; border-radius: 50%;"></div>
+            <div class="legend-label">Route</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background-color: #9b59b6; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);"></div>
+            <div class="legend-label">IP Group</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background-color: #e74c3c; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);"></div>
+            <div class="legend-label">Local IP</div>
+        </div>
+    </div>
     <div class="network-graph" id="networkGraph">
         <!-- SVG visualization will be rendered here -->
     </div>
@@ -148,6 +166,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const nodes = [];
     const links = [];
     
+    // Group hosts by IP address (without port)
+    const hostGroups = {};
+    const ipToNode = {};
+    
+    // Extract all hosts from routes and organize by IP
+    visualizationData.routes.forEach(route => {
+        if (route.hosts) {
+            route.hosts.forEach(host => {
+                // Extract IP address without port
+                const hostParts = host.host.split(':');
+                const ip = hostParts[0];
+                
+                // Create or add to group
+                if (!hostGroups[ip]) {
+                    hostGroups[ip] = {
+                        ip: ip,
+                        hosts: [],
+                        routes: [],
+                        routeCount: 0
+                    };
+                }
+                
+                // Add host to group with route reference
+                hostGroups[ip].hosts.push({
+                    ...host, 
+                    routeId: route.id,
+                    routeName: route.subdomain
+                });
+                
+                // Track unique routes per IP
+                if (!hostGroups[ip].routes.includes(route.id)) {
+                    hostGroups[ip].routes.push(route.id);
+                    hostGroups[ip].routeCount++;
+                }
+            });
+        }
+    });
+    
     // Add domain nodes with more strategic initial positioning
     const domainCount = visualizationData.domains.length;
     visualizationData.domains.forEach((domain, index) => {
@@ -210,46 +266,60 @@ document.addEventListener('DOMContentLoaded', function() {
             source: domainNode,
             target: routeId
         });
+    });
+    
+    // Add IP group nodes in a more distant orbit
+    Object.keys(hostGroups).forEach((ip, index) => {
+        const group = hostGroups[ip];
+        const isLocalHost = ip.includes(visualizationData.localIp);
+        const ipNodeId = `ip-${ip.replace(/\./g, '-')}`;
         
-        // Add hosts and connect to routes
+        // Position IP nodes in an outer circle
+        const angle = (index / Object.keys(hostGroups).length) * 2 * Math.PI;
+        const radius = Math.min(width, height) * 0.55; // Larger radius than domains
+        
+        // Create IP group node
+        nodes.push({
+            id: ipNodeId,
+            type: 'ip-group',
+            name: `${ip} (${group.routeCount} routes)`,
+            x: width/2 + radius * Math.cos(angle),
+            y: height/2 + radius * Math.sin(angle),
+            color: isLocalHost ? '#e74c3c' : '#9b59b6', // Purple for IP groups, red for local
+            routeCount: group.routeCount,
+            hosts: group.hosts.length
+        });
+        
+        // Store reference to node for easy access
+        ipToNode[ip] = ipNodeId;
+    });
+    
+    // Connect routes to their respective IP groups
+    visualizationData.routes.forEach(route => {
+        const routeId = `route-${route.id}`;
+        
         if (route.hosts) {
+            // Group hosts by IP to avoid duplicate connections
+            const routeIps = new Set();
+            
             route.hosts.forEach(host => {
-                const hostId = `host-${host.id}`;
+                // Extract IP without port
+                const hostParts = host.host.split(':');
+                const ip = hostParts[0];
                 
-                // Check if the host matches the local IP
-                const isLocalHost = host.host.includes(visualizationData.localIp);
-                
-                // Find the route node for positioning hosts around it
-                const routeNodeIndex = nodes.findIndex(n => n.id === routeId);
-                if (routeNodeIndex >= 0) {
-                    const routeNode = nodes[routeNodeIndex];
-                    // Calculate position near its route with some randomness
-                    const angle = Math.random() * 2 * Math.PI;
-                    const distance = 50 + Math.random() * 30; // 50-80 pixels from route
-                    nodes.push({
-                        id: hostId,
-                        type: 'host',
-                        name: host.host,
-                        x: routeNode.x + distance * Math.cos(angle),
-                        y: routeNode.y + distance * Math.sin(angle),
-                        color: isLocalHost ? '#e74c3c' : '#f39c12'
-                    });
-                } else {
-                    // Fallback if route node not found
-                    nodes.push({
-                        id: hostId,
-                        type: 'host',
-                        name: host.host,
-                        x: width/2 + (Math.random() - 0.5) * width * 0.5,
-                        y: height/2 + (Math.random() - 0.5) * height * 0.5,
-                        color: isLocalHost ? '#e74c3c' : '#f39c12'
-                    });
+                // Only add one connection per IP
+                if (!routeIps.has(ip)) {
+                    routeIps.add(ip);
+                    
+                    // Connect route to IP group
+                    const ipNodeId = ipToNode[ip];
+                    if (ipNodeId) {
+                        links.push({
+                            source: routeId,
+                            target: ipNodeId
+                        });
+                    }
                 }
-                
-                links.push({
-                    source: routeId,
-                    target: hostId
-                });
             });
         }
     });
@@ -270,6 +340,21 @@ document.addEventListener('DOMContentLoaded', function() {
     nodes.forEach(node => {
         nodeMap[node.id] = node;
     });
+    
+    // Helper function to get node size based on type and data
+    function getNodeSize(node) {
+        switch (node.type) {
+            case 'domain':
+                return 12;
+            case 'route':
+                return 8;
+            case 'ip-group':
+                // Scale IP group size based on number of routes (min 12, max 25)
+                return Math.max(12, Math.min(25, 12 + node.routeCount * 1.5));
+            default:
+                return 8;
+        }
+    }
     
     // Function to create the visualization with performance optimizations
     function createVisualization() {
@@ -325,20 +410,57 @@ document.addEventListener('DOMContentLoaded', function() {
             g.setAttribute('data-id', node.id);
             g.setAttribute('class', `node-${node.type}`);
             
-            // Create node circle with a glow effect using a more efficient approach
-            // First create a larger background circle
-            const background = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            background.setAttribute('r', node.type === 'domain' ? 15 : 11);
-            background.setAttribute('fill', node.color);
-            background.setAttribute('opacity', '0.3');
-            g.appendChild(background);
+            // Get node size based on type and data
+            const nodeSize = getNodeSize(node);
             
-            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('r', node.type === 'domain' ? 12 : 8);
-            circle.setAttribute('fill', node.color);
-            circle.setAttribute('stroke', '#ffffff');
-            circle.setAttribute('stroke-width', '1');
-            g.appendChild(circle);
+            // Special handling for IP groups - hexagon shape
+            if (node.type === 'ip-group') {
+                // Create hexagon for IP groups
+                const size = nodeSize;
+                
+                // First create a larger background
+                const backgroundHex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                const hexPoints = createHexagonPoints(size + 3);
+                backgroundHex.setAttribute('points', hexPoints);
+                backgroundHex.setAttribute('fill', node.color);
+                backgroundHex.setAttribute('opacity', '0.3');
+                g.appendChild(backgroundHex);
+                
+                // Then create the main hexagon
+                const hexagon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                hexagon.setAttribute('points', createHexagonPoints(size));
+                hexagon.setAttribute('fill', node.color);
+                hexagon.setAttribute('stroke', '#ffffff');
+                hexagon.setAttribute('stroke-width', '1.5');
+                g.appendChild(hexagon);
+                
+                // Add route count inside hexagon
+                if (node.routeCount > 0) {
+                    const countText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    countText.setAttribute('text-anchor', 'middle');
+                    countText.setAttribute('dominant-baseline', 'central');
+                    countText.setAttribute('font-size', '10px');
+                    countText.setAttribute('fill', '#ffffff');
+                    countText.setAttribute('font-weight', 'bold');
+                    countText.textContent = node.routeCount;
+                    g.appendChild(countText);
+                }
+            } else {
+                // Regular circle nodes for domains and routes
+                // Create node circle with a glow effect
+                const background = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                background.setAttribute('r', nodeSize + 3);
+                background.setAttribute('fill', node.color);
+                background.setAttribute('opacity', '0.3');
+                g.appendChild(background);
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('r', nodeSize);
+                circle.setAttribute('fill', node.color);
+                circle.setAttribute('stroke', '#ffffff');
+                circle.setAttribute('stroke-width', '1');
+                g.appendChild(circle);
+            }
             
             // Only create text if we actually have a name (improved performance)
             if (node.name) {
@@ -346,7 +468,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 text.setAttribute('text-anchor', 'middle');
                 text.setAttribute('dy', '25');
-                text.setAttribute('font-size', '12px');
+                text.setAttribute('font-size', node.type === 'ip-group' ? '14px' : '12px');
                 text.setAttribute('fill', '#ffffff');
                 text.setAttribute('font-weight', 'bold');
                 text.setAttribute('stroke', '#000000');
@@ -356,18 +478,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 g.appendChild(text);
             }
             
+            // Function to create hexagon points
+            function createHexagonPoints(size) {
+                const points = [];
+                for (let i = 0; i < 6; i++) {
+                    const angleDeg = 60 * i - 30;
+                    const angleRad = (Math.PI / 180) * angleDeg;
+                    const x = size * Math.cos(angleRad);
+                    const y = size * Math.sin(angleRad);
+                    points.push(`${x},${y}`);
+                }
+                return points.join(' ');
+            }
+            
             return g;
         }
         
         // Process nodes by type for better visual layering
-        // First process non-domains (routes, hosts, etc)
-        nodes.filter(node => node.type !== 'domain').forEach(node => {
+        // First process routes
+        nodes.filter(node => node.type === 'route').forEach(node => {
             const nodeElement = createNodeElement(node);
             nodesGroup.appendChild(nodeElement);
         });
         
-        // Then process domains so they appear on top
+        // Then process domains
         nodes.filter(node => node.type === 'domain').forEach(node => {
+            const nodeElement = createNodeElement(node);
+            nodesGroup.appendChild(nodeElement);
+        });
+        
+        // Finally process IP groups so they appear on top
+        nodes.filter(node => node.type === 'ip-group').forEach(node => {
             const nodeElement = createNodeElement(node);
             nodesGroup.appendChild(nodeElement);
         });
@@ -517,9 +658,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Advanced force simulation to create a well-distributed layout
     function applyForces() {
         // Apply repulsion force to separate nodes - with reduced strength for stability
-        const baseRepulsion = 80; // Reduced from 150 to make movement less aggressive
-        const domainRepulsion = 120; // Reduced from 200 to make movement less aggressive
-        const attraction = 0.02; // Reduced from 0.05 for gentler forces
+        const baseRepulsion = 80; // Base repulsion for regular nodes
+        const domainRepulsion = 120; // Stronger repulsion for domains
+        const ipGroupRepulsion = 160; // Even stronger repulsion for IP groups
+        const attraction = 0.02; // Gentle attraction force
         
         for (let i = 0; i < nodes.length; i++) {
             // Ensure nodes have valid positions
@@ -537,8 +679,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Use different repulsion strengths based on node types
                 let repulsion = baseRepulsion;
-                if (nodes[i].type === 'domain' || nodes[j].type === 'domain') {
-                    repulsion = domainRepulsion; // Stronger repulsion for domains
+                
+                // IP groups need stronger repulsion
+                if (nodes[i].type === 'ip-group' || nodes[j].type === 'ip-group') {
+                    repulsion = ipGroupRepulsion;
+                }
+                // Domains need medium repulsion
+                else if (nodes[i].type === 'domain' || nodes[j].type === 'domain') {
+                    repulsion = domainRepulsion;
+                }
+                
+                // Apply size-based adjustment for IP groups (larger groups need more space)
+                if (nodes[i].type === 'ip-group' && nodes[i].routeCount > 3) {
+                    repulsion += nodes[i].routeCount * 5;
+                }
+                if (nodes[j].type === 'ip-group' && nodes[j].routeCount > 3) {
+                    repulsion += nodes[j].routeCount * 5;
                 }
                 
                 if (dist > 0 && dist < repulsion) { // Avoid division by zero
@@ -607,17 +763,32 @@ document.addEventListener('DOMContentLoaded', function() {
     // Distribute nodes in initial positions
     function initialLayout() {
         const domainCount = nodes.filter(n => n.type === 'domain').length;
-        const angleStep = (2 * Math.PI) / Math.max(1, domainCount);
+        const domainAngleStep = (2 * Math.PI) / Math.max(1, domainCount);
         
-        // Position domains in a circle
+        const ipGroupCount = nodes.filter(n => n.type === 'ip-group').length;
+        const ipGroupAngleStep = (2 * Math.PI) / Math.max(1, ipGroupCount);
+        
+        // Position domains in an inner circle
         let domainIndex = 0;
         nodes.forEach(node => {
             if (node.type === 'domain') {
                 const radius = Math.min(width, height) * 0.3;
-                const angle = domainIndex * angleStep;
+                const angle = domainIndex * domainAngleStep;
                 node.x = width/2 + radius * Math.cos(angle);
                 node.y = height/2 + radius * Math.sin(angle);
                 domainIndex++;
+            }
+        });
+        
+        // Position IP groups in an outer circle
+        let ipGroupIndex = 0;
+        nodes.forEach(node => {
+            if (node.type === 'ip-group') {
+                const radius = Math.min(width, height) * 0.55;
+                const angle = ipGroupIndex * ipGroupAngleStep;
+                node.x = width/2 + radius * Math.cos(angle);
+                node.y = height/2 + radius * Math.sin(angle);
+                ipGroupIndex++;
             }
         });
         
@@ -709,13 +880,18 @@ g {
     cursor: grab;
 }
 
-g circle {
+g circle, g polygon {
     transition: stroke-width 0.2s, stroke-opacity 0.2s;
 }
 
-g:hover circle {
+g:hover circle, g:hover polygon {
     stroke-width: 2px;
     stroke-opacity: 1;
+}
+
+.node-ip-group text {
+    font-size: 14px;
+    font-weight: bold;
 }
 
 .stat-card {
@@ -751,6 +927,31 @@ g:hover circle {
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
     color: #ffffff;
+}
+
+.visualization-legend {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin: 0 15px;
+}
+
+.legend-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    border: 1px solid #fff;
+}
+
+.legend-label {
+    font-size: 14px;
+    color: #fff;
 }
 
 .network-graph {

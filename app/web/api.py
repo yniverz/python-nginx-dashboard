@@ -30,7 +30,6 @@ def get_gateway_server(server_id: str, request: Request, db: Session = Depends(g
     
     # Construct the full URI without query parameters
     base_uri = f"{scheme}://{host}{path}"
-    print(f"Request URI without query params: {base_uri}")
     
     # Validate authentication token
     if not x_gateway_token:
@@ -65,7 +64,6 @@ def get_gateway_client(client_id: str, request: Request, db: Session = Depends(g
     
     # Construct the full URI without query parameters
     base_uri = f"{scheme}://{host}{path}"
-    print(f"Request URI without query params: {base_uri}")
     
     # Validate authentication token
     if not x_gateway_token:
