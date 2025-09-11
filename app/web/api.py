@@ -3,7 +3,7 @@ API endpoints for external services.
 Provides configuration endpoints for FRP gateway servers and clients.
 """
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from app.persistence.db import get_db, Base, engine
@@ -16,11 +16,18 @@ router = APIRouter(prefix="/api")
 Base.metadata.create_all(bind=engine)
 
 @router.get("/gateway/server/{server_id}", response_class=PlainTextResponse)
-def get_gateway_server(server_id: str, db: Session = Depends(get_db), x_gateway_token: str | None = Header(None)):
+def get_gateway_server(server_id: str, request: Request, db: Session = Depends(get_db), x_gateway_token: str | None = Header(None)):
     """
     Get FRP server configuration for a gateway server.
     Requires X-Gateway-Token header for authentication.
     """
+    # Access request domain information
+    host = request.headers.get("host")  # Gets the Host header which includes domain:port
+    # Alternatively you can access full URL: request.url.hostname
+    
+    # Log or use the domain information as needed
+    print(f"Request received from domain: {host}")
+    
     # Validate authentication token
     if not x_gateway_token:
         raise HTTPException(status_code=404)
@@ -39,11 +46,18 @@ def get_gateway_server(server_id: str, db: Session = Depends(get_db), x_gateway_
     return PlainTextResponse(generate_server_toml(server))
 
 @router.get("/gateway/client/{client_id}", response_class=PlainTextResponse)
-def get_gateway_client(client_id: str, db: Session = Depends(get_db), x_gateway_token: str | None = Header(None)):
+def get_gateway_client(client_id: str, request: Request, db: Session = Depends(get_db), x_gateway_token: str | None = Header(None)):
     """
     Get FRP client configuration for a gateway client.
     Requires X-Gateway-Token header for authentication.
     """
+    # Access request domain information
+    host = request.headers.get("host")  # Gets the Host header which includes domain:port
+    # You can also get just the hostname: request.url.hostname
+    
+    # Log or use the domain information as needed
+    print(f"Request received from domain: {host}")
+    
     # Validate authentication token
     if not x_gateway_token:
         raise HTTPException(status_code=404)
