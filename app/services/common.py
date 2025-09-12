@@ -105,6 +105,22 @@ def propagate_changes(db: Session):
     repos.GatewayConnectionRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
     repos.DnsRecordRepo(db).delete_all_managed_by(ManagedBy.SYSTEM)
 
+    # Get all stream routes to create proxy connections for them
+    routes = repos.NginxRouteRepo(db).list_all_active()
+    stream_routes = [r for r in routes if r.protocol == "STREAM"]
+    stream_ports = []
+    
+    for route in stream_routes:
+        try:
+            # Remove any leading slash and convert to integer
+            port = route.path_prefix.lstrip('/')
+            port = int(port)
+            stream_ports.append(port)
+        except (ValueError, AttributeError):
+            # Skip routes with invalid port numbers
+            print(f"[propagate_changes] Invalid port in stream route: {route.path_prefix}")
+            continue
+
     # Process all gateway clients
     clients = repos.GatewayClientRepo(db).list_all()
     print(f"[propagate_changes] Processing {len(clients)} gateway clients...")
@@ -137,6 +153,22 @@ def propagate_changes(db: Session):
                     managed_by=ManagedBy.SYSTEM,
                 )
             )
+            
+            # Create gateway connections for each STREAM route
+            for port in stream_ports:
+                conn_name = f"origin_{client.server.name}_{port}"
+                print(f"[propagate_changes] Creating stream proxy connection: {conn_name} on port {port}")
+                repos.GatewayConnectionRepo(db).create(
+                    GatewayConnection(
+                        name=conn_name,
+                        client_id=client.id,
+                        protocol=GatewayProtocol.TCP,
+                        local_ip=settings.LOCAL_IP,
+                        local_port=port,
+                        remote_port=port,
+                        managed_by=ManagedBy.SYSTEM,
+                    )
+                )
 
             # Create direct DNS records for domains that support direct prefix
             origin_ip = client.server.host

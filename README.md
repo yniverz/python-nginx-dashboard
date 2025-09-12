@@ -33,6 +33,27 @@ python run.py
 # UI: http://127.0.0.1:8000  (user/pass: admin/admin)
 ```
 
+### Using Stream routes
+To enable STREAM protocol handling in Nginx, you need to install the appropriate module. On Debian-based systems, you can do this by installing the `libnginx-mod-stream` package. Here’s how to do it:
+
+```bash
+sudo apt update
+sudo apt install libnginx-mod-stream
+```
+
+Then it needs to be enabled in your Nginx configuration.
+To find the necessary module path run:
+
+```bash
+sudo find /usr/lib*/nginx/modules /etc/nginx/modules -name 'ngx_stream_module.so' 2>/dev/null
+```
+
+Once you have the path, add the following line to your main Nginx configuration file (usually located at `/etc/nginx/nginx.conf`):
+
+```nginx
+load_module /path/to/ngx_stream_module.so;
+```
+
 ---
 
 ## Configuration (.env)
