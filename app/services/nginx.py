@@ -23,8 +23,7 @@ class NginxConfigGenerator:
         """Generate all nginx configuration files."""
         self.global_upstream_counter = 0
         self._generate_http_config()
-        # Stream configuration generation is currently disabled
-        # self._generate_stream_config()
+        self._generate_stream_config()
 
 
 
@@ -77,41 +76,6 @@ class NginxConfigGenerator:
             ip_block += "real_ip_recursive on;\n"
                 
         return ip_block
-    
-
-    # def _ensure_selfsigned_cert(self, first_label: str, domain: str) -> tuple[str, str]:
-    #     """
-    #     Make sure /etc/nginx/ssl/<first>.<domain>/{fullchain,privkey}.pem exist.
-    #     Returns (crt_path, key_path).  Idempotent & thread-safe.
-    #     """
-    #     target_dir = Path(f"/etc/nginx/ssl/{first_label}.{domain}")
-    #     crt = target_dir / "fullchain.pem"
-    #     key = target_dir / "privkey.pem"
-
-    #     if crt.exists() and key.exists():
-    #         # refresh every 5 years just for good measure
-    #         ts = datetime.datetime.fromtimestamp(crt.stat().st_mtime)
-    #         if (datetime.datetime.utcnow() - ts).days < 5*365:
-    #             return str(crt), str(key)
-
-    #     target_dir.mkdir(parents=True, exist_ok=True)
-
-    #     def _run():
-    #         tmp_crt = crt.with_suffix(".tmp")
-    #         tmp_key = key.with_suffix(".tmp")
-    #         subprocess.run([
-    #             "openssl", "req", "-x509", "-nodes",
-    #             "-newkey", "rsa:2048", "-days", "3650",
-    #             "-subj", f"/CN=*.{first_label}.{domain}",
-    #             "-addext", f"subjectAltName=DNS:{first_label}.{domain},DNS:*.{first_label}.{domain}",
-    #             "-keyout", str(tmp_key), "-out", str(tmp_crt)
-    #         ], check=True)
-    #         os.rename(tmp_crt, crt)
-    #         os.rename(tmp_key, key)
-
-    #     # fire-and-forget so UI stays snappy
-    #     threading.Thread(target=_run, daemon=True).start()
-    #     return str(crt), str(key)
 
 
     def _generate_http_config(self):
@@ -255,33 +219,62 @@ location {path} {{
 
 
 
-#     def _generate_stream_config(self):
-#         stream_config = ""
-
-#         self.cloudflare_srv_map = []
-
-#         for subdomain in self.proxy_map["stream"].keys():
-#             for port, data in self.proxy_map["stream"][subdomain].items():
-#                 if not data["active"]:
-#                     continue
-
-#                 if data["type"] == "proxy":
-#                     upstream_name = self._get_upstream_name()
-#                     upstream_blocks = self._get_upstream(upstream_name, data["targets"])
-                    
-#                     stream_config += f"""
-# {upstream_blocks}
-# server {{
-#     listen {port};
-#     server_name {subdomain + '.' + self.domain if subdomain != '@' else self.domain};
-#     proxy_pass {upstream_name};
-#     proxy_timeout 10s;
-#     proxy_connect_timeout 10s;
-# }}
-# """
-                    
-#         # create path recursive directory if it does not exist
-#         os.makedirs(os.path.dirname(self.stream_config_path), exist_ok=True)
-
-#         with open(self.stream_config_path, 'w') as stream_config_file:
-#             stream_config_file.write(stream_config)
+    def _generate_stream_config(self):
+        """
+        Generate the NGINX stream configuration file.
+        Uses path_prefix as the listen port value.
+        """
+        import os
+        
+        # Get all active routes with STREAM protocol
+        routes = repos.NginxRouteRepo(self.db).list_all_active()
+        stream_routes = [r for r in routes if r.protocol == NginxRouteProtocol.STREAM]
+        
+        if not stream_routes:
+            # No stream routes found, create empty config
+            if not self.dry_run:
+                # Create directory if it doesn't exist
+                os.makedirs(os.path.dirname(settings.NGINX_STREAM_CONF_PATH), exist_ok=True)
+                with open(settings.NGINX_STREAM_CONF_PATH, 'w') as stream_config_file:
+                    stream_config_file.write("# No stream configurations found\n")
+            return
+        
+        # Start with global configuration
+        stream_config = ""
+        
+        # Generate stream server blocks for each route
+        for route in stream_routes:
+            # For stream configs, path_prefix is used as the port number
+            try:
+                # Remove any leading slash and convert to integer
+                port = route.path_prefix.lstrip('/')
+                port = int(port)
+            except (ValueError, AttributeError):
+                # Skip routes with invalid port numbers
+                continue
+                
+            # Skip routes without active hosts
+            if not any(h.active for h in route.hosts):
+                continue
+                
+            # Create upstream for load balancing
+            upstream_name = self._get_upstream_name()
+            upstream_blocks = self._get_upstream(upstream_name, route.hosts)
+            
+            # Generate server block with proxy configuration
+            stream_config += f"""
+{upstream_blocks}
+server {{
+    listen {port};
+    proxy_pass {upstream_name};
+    proxy_timeout 10s;
+    proxy_connect_timeout 10s;
+}}
+"""
+        
+        # Write configuration to file unless in dry run mode
+        if not self.dry_run:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(settings.NGINX_STREAM_CONF_PATH), exist_ok=True)
+            with open(settings.NGINX_STREAM_CONF_PATH, 'w') as stream_config_file:
+                stream_config_file.write(stream_config)

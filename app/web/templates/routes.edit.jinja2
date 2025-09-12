@@ -89,4 +89,66 @@
 
     <button type="submit">Add Host</button>
 </form>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const protocolSelect = document.getElementById('protocol');
+    const pathPrefixInput = document.getElementById('path_prefix');
+    const pathPrefixLabel = document.querySelector('label[for="path_prefix"]');
+    const backendPathDiv = document.querySelector('div:has(> #backend_path)');
+    const originalLabel = "Path Prefix:";
+    
+    // Function to update the path field based on selected protocol
+    function updatePathField() {
+        const isStream = protocolSelect.value === 'STREAM';
+        
+        // Update label and input behavior
+        if (isStream) {
+            pathPrefixLabel.textContent = "Listen Port:";
+            pathPrefixInput.setAttribute('placeholder', 'Port number (e.g. 8080)');
+            pathPrefixInput.setAttribute('type', 'number');
+            pathPrefixInput.setAttribute('min', '1');
+            pathPrefixInput.setAttribute('max', '65535');
+            
+            // Remove any leading slash if present
+            if (pathPrefixInput.value.startsWith('/')) {
+                pathPrefixInput.value = pathPrefixInput.value.substring(1);
+            }
+            
+            // Hide backend path for STREAM
+            backendPathDiv.style.display = 'none';
+        } else {
+            pathPrefixLabel.textContent = originalLabel;
+            pathPrefixInput.setAttribute('placeholder', 'Path prefix (e.g. /api)');
+            pathPrefixInput.setAttribute('type', 'text');
+            pathPrefixInput.removeAttribute('min');
+            pathPrefixInput.removeAttribute('max');
+            
+            // Add leading slash if not present and not empty
+            if (pathPrefixInput.value && !pathPrefixInput.value.startsWith('/')) {
+                pathPrefixInput.value = '/' + pathPrefixInput.value;
+            }
+            
+            // Show backend path for other protocols
+            backendPathDiv.style.display = '';
+        }
+    }
+    
+    // Initialize on page load
+    updatePathField();
+    
+    // Update when protocol changes
+    protocolSelect.addEventListener('change', updatePathField);
+    
+    // Validate form before submission
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (protocolSelect.value === 'STREAM') {
+            const port = parseInt(pathPrefixInput.value);
+            if (isNaN(port) || port < 1 || port > 65535) {
+                e.preventDefault();
+                alert('For STREAM protocol, please enter a valid port number (1-65535)');
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

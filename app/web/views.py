@@ -635,12 +635,29 @@ async def create_route(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     new_route = None
     try:
+        protocol = form["protocol"]
+        path_prefix = form.get("path_prefix", "/") or "/"
+        
+        # Handle path_prefix differently for STREAM protocol
+        if protocol == "STREAM":
+            # For STREAM, ensure it's a valid port number without leading slash
+            try:
+                port = int(path_prefix.lstrip('/'))
+                path_prefix = str(port)  # Store as string without leading slash
+            except ValueError:
+                flash(request, "For STREAM protocol, path prefix must be a valid port number", category="error")
+                return RedirectResponse(url=request.url_for("view_routes"), status_code=303)
+        else:
+            # For other protocols, ensure leading slash
+            if not path_prefix.startswith('/'):
+                path_prefix = '/' + path_prefix
+                
         new_route = repos.NginxRouteRepo(db).create(
             NginxRoute(
                 domain_id=form["domain_id"],
                 subdomain=form["subdomain"],
-                protocol=form["protocol"],
-                path_prefix=form.get("path_prefix", "/") or "/",
+                protocol=protocol,
+                path_prefix=path_prefix,
                 backend_path=form.get("backend_path", "") or "",
             )
         )
@@ -696,8 +713,26 @@ async def update_route(request: Request, route_id: int, db: Session = Depends(ge
     try:
         route.domain_id = form["domain_id"]
         route.subdomain = form["subdomain"]
-        route.protocol = form["protocol"]
-        route.path_prefix = form.get("path_prefix", "/") or "/"
+        protocol = form["protocol"]
+        route.protocol = protocol
+        
+        path_prefix = form.get("path_prefix", "/") or "/"
+        
+        # Handle path_prefix differently for STREAM protocol
+        if protocol == "STREAM":
+            # For STREAM, ensure it's a valid port number without leading slash
+            try:
+                port = int(path_prefix.lstrip('/'))
+                path_prefix = str(port)  # Store as string without leading slash
+            except ValueError:
+                flash(request, "For STREAM protocol, path prefix must be a valid port number", category="error")
+                return RedirectResponse(url=request.url_for("edit_route", route_id=route_id), status_code=303)
+        else:
+            # For other protocols, ensure leading slash
+            if not path_prefix.startswith('/'):
+                path_prefix = '/' + path_prefix
+                
+        route.path_prefix = path_prefix
         route.backend_path = form.get("backend_path", "") or ""
         repos.NginxRouteRepo(db).update(route)
 
