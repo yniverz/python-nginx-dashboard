@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     DEBUG_MODE: bool = True
     ENABLE_NGINX: bool = False  # Enable nginx configuration generation
     ENABLE_CLOUDFLARE: bool = False  # Enable Cloudflare DNS/SSL management
+    USE_SSL: bool = False  # Enable HTTPS using self-signed certificates
 
     def model_post_init(self, __context):
         """Initialize Cloudflare client after settings are loaded."""

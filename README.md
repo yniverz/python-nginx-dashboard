@@ -67,6 +67,9 @@ CF_SSL_DIR="/etc/nginx/ssl"        # where certs/keys are written
 # Networking
 LOCAL_IP="127.0.0.1"               # used for auto FRP origin connections
 
+# SSL Configuration
+USE_SSL=false                      # set true to enable HTTPS with self-signed cert
+
 # Debug
 DEBUG_MODE=true
 ```
