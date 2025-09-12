@@ -109,6 +109,7 @@ def propagate_changes(db: Session):
     routes = repos.NginxRouteRepo(db).list_all_active()
     stream_routes = [r for r in routes if r.protocol == "STREAM"]
     stream_ports = []
+    stream_route_details = []  # Store tuples of (port, subdomain, domain_id)
     
     for route in stream_routes:
         try:
@@ -116,6 +117,9 @@ def propagate_changes(db: Session):
             port = route.path_prefix.lstrip('/')
             port = int(port)
             stream_ports.append(port)
+            
+            # Store route details for DNS entries
+            stream_route_details.append((port, route.subdomain, route.domain_id))
         except (ValueError, AttributeError):
             # Skip routes with invalid port numbers
             print(f"[propagate_changes] Invalid port in stream route: {route.path_prefix}")
@@ -169,6 +173,46 @@ def propagate_changes(db: Session):
                         managed_by=ManagedBy.SYSTEM,
                     )
                 )
+            
+            # Create DNS entries for each stream route subdomain pointing to this origin server
+            origin_ip = client.server.host
+            for port, subdomain, domain_id in stream_route_details:
+                domain = repos.DomainRepo(db).get(domain_id)
+                if not domain:
+                    continue
+                    
+                # Format the subdomain name for the DNS record
+                dns_name = subdomain if subdomain != '@' else '@'
+                dns_description = f"{subdomain}.{domain.name}" if subdomain != '@' else f"{domain.name}"
+                
+                print(f"[propagate_changes] Creating stream DNS entry: {dns_description} -> {origin_ip} (port {port})")
+                
+                # Check if the DNS record already exists
+                exists_id = repos.DnsRecordRepo(db).exists(
+                    domain_id=domain_id,
+                    name=dns_name,
+                    type="A",
+                    content=origin_ip
+                )
+                
+                if exists_id:
+                    # Update the existing record
+                    rec = repos.DnsRecordRepo(db).get(exists_id)
+                    rec.proxied = False  # Direct connection to the origin
+                    rec.managed_by = ManagedBy.SYSTEM
+                    repos.DnsRecordRepo(db).update(rec)
+                else:
+                    # Create a new DNS record
+                    repos.DnsRecordRepo(db).create(
+                        DnsRecord(
+                            domain_id=domain_id,
+                            name=dns_name,
+                            type="A",
+                            content=origin_ip,
+                            proxied=False,  # Direct connection to the origin
+                            managed_by=ManagedBy.SYSTEM,
+                        )
+                    )
 
             # Create direct DNS records for domains that support direct prefix
             origin_ip = client.server.host
