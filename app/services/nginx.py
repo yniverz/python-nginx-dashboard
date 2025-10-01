@@ -135,6 +135,9 @@ server {{
             domain = routes[0].domain
             path_blocks, upstream_blocks = self._generate_http_path_blocks(routes)
 
+            if len(path_blocks.strip()) == 0:
+                continue
+
             # Determine SSL certificate path based on subdomain structure
             if subdomain in ("@", "") or "." not in subdomain:
                 label_key = ""
@@ -177,6 +180,9 @@ server {{
 
         for route in routes:
             path = route.path_prefix if route.path_prefix.startswith("/") else f"/{route.path_prefix}"
+
+            if route.protocol == NginxRouteProtocol.STREAM:
+                continue
 
             if route.protocol == NginxRouteProtocol.REDIRECT:
                 # Simple redirect to first host
