@@ -315,7 +315,7 @@ class CloudFlareManager:
 
     def _get_shared_record_from_cf(self, domain: str, record) -> SharedRecordType:
         if record.type == DnsType.SRV.value:
-            content = f"{record.data.target};{record.data.port}"
+            content = f"{record.data.target};{int(record.data.port)}"
         else:
             content = record.content
 
