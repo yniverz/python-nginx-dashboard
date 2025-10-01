@@ -313,11 +313,16 @@ class CloudFlareManager:
         return f"{record.name}.{record.domain.name}" if record.name != "@" else record.domain.name
 
     def _get_shared_record_from_cf(self, domain: str, record) -> SharedRecordType:
+        if record.type == DnsType.SRV.value:
+            content = f"{record.data.target};{record.data.port}"
+        else:
+            content = record.content
+
         return SharedRecordType(
             domain=domain,
             name=record.name,
             type=record.type,
-            content=record.content,
+            content=content,
             proxied=record.proxied,
             managed_by=ManagedBy.IMPORTED,
             record_id=record.id,
