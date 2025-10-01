@@ -198,6 +198,7 @@ class CloudFlareManager:
             self.cf_cache.entries_by_zone[zone.id] = entries
             for entry in entries:
                 shared_rec = self._get_shared_record_from_cf(domain.name, entry)
+                print(shared_rec)
 
                 # Check if this record already exists locally (user or system managed)
                 existing_local = next((e for e in self.cf_cache.local_entries if e == shared_rec), 
