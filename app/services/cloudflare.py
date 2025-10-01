@@ -12,6 +12,7 @@ from typing import Optional, Union
 import cloudflare
 import cloudflare.types.zones
 from cloudflare.types.zones import Zone
+from cloudflare.types.dns.record_create_params import SRVRecordData
 from cloudflare.pagination import SyncV4PagePaginationArray
 import requests
 from pathlib import Path
@@ -20,7 +21,7 @@ import subprocess
 import ipaddress
 from app.config import settings
 from app.persistence import repos
-from app.persistence.models import DnsRecord, Domain, ManagedBy
+from app.persistence.models import DnsRecord, DnsType, Domain, ManagedBy
 
 
 
@@ -264,6 +265,22 @@ class CloudFlareManager:
         if self.dry_run:
             print("Dry run enabled, not creating record.")
             return
+        
+        if record.type == DnsType.SRV:
+            self.cf.dns.records.create(
+                zone_id=self._get_zone(record.domain.name).id,
+                name=self._get_fqdn(record),
+                type="SRV",
+                data=SRVRecordData(
+                    target=record.content.split(":")[0],
+                    port=record.content.split(":")[1],
+                    priority=record.priority,
+                    weight=1
+                )
+            )
+
+            return
+
         self.cf.dns.records.create(
             zone_id=self._get_zone(record.domain.name).id,
             name=self._get_fqdn(record),
