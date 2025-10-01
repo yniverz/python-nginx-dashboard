@@ -132,6 +132,7 @@ server {{
             subdomains.setdefault(route.subdomain, []).append(route)
 
         for subdomain, routes in subdomains.items():
+            domain = routes[0].domain
             path_blocks, upstream_blocks = self._generate_http_path_blocks(routes)
 
             # Determine SSL certificate path based on subdomain structure
@@ -141,7 +142,7 @@ server {{
                 # For multi-level subdomains, use the parent domain for wildcard cert
                 label_key = ".".join(subdomain.split(".")[1:]) + "."
 
-            dir_name = f"{label_key}{route.domain.name}"
+            dir_name = f"{label_key}{domain.name}"
             crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
             key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
 
@@ -150,7 +151,7 @@ server {{
 {upstream_blocks}
 server {{
     listen 443 ssl;
-    server_name {subdomain + '.' + route.domain.name if subdomain != '@' else route.domain.name};
+    server_name {subdomain + '.' + domain.name if subdomain != '@' else domain.name};
     ssl_certificate     {crt_path};
     ssl_certificate_key {key_path};
     ssl_protocols TLSv1.2 TLSv1.3;
