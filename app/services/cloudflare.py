@@ -272,8 +272,8 @@ class CloudFlareManager:
                 name=self._get_fqdn(record),
                 type="SRV",
                 data=SRVRecordData(
-                    target=record.content.split(":")[0],
-                    port=record.content.split(":")[1],
+                    target=record.content.split(";")[0],
+                    port=record.content.split(";")[1],
                     priority=record.priority,
                     weight=1
                 )
