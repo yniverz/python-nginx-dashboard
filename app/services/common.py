@@ -128,7 +128,8 @@ def propagate_changes(db: Session):
     # Process all gateway clients
     clients = repos.GatewayClientRepo(db).list_all()
     print(f"[propagate_changes] Processing {len(clients)} gateway clients...")
-    
+
+    created_dns_ids = []
     for client in clients:
         print(f"[propagate_changes] Processing client: {client.server.name} ({client.server.host}), is_origin: {client.is_origin}")
         if client.is_origin:
@@ -200,10 +201,12 @@ def propagate_changes(db: Session):
                     rec = repos.DnsRecordRepo(db).get(exists_id)
                     rec.proxied = False  # Direct connection to the origin
                     rec.managed_by = ManagedBy.SYSTEM
-                    repos.DnsRecordRepo(db).update(rec)
+                    new_rec = repos.DnsRecordRepo(db).update(rec)
+                    created_dns_ids.append(new_rec.id)
+                    continue
                 else:
                     # Create a new DNS record
-                    repos.DnsRecordRepo(db).create(
+                    new_rec = repos.DnsRecordRepo(db).create(
                         DnsRecord(
                             domain_id=domain_id,
                             name=dns_name,
@@ -213,6 +216,7 @@ def propagate_changes(db: Session):
                             managed_by=ManagedBy.SYSTEM,
                         )
                     )
+                    created_dns_ids.append(new_rec.id)
 
             # Create direct DNS records for domains that support direct prefix
             origin_ip = client.server.host
@@ -232,10 +236,11 @@ def propagate_changes(db: Session):
                         rec.content = origin_ip
                         rec.proxied = False
                         rec.managed_by = ManagedBy.SYSTEM
-                        repos.DnsRecordRepo(db).update(rec)
+                        new_rec = repos.DnsRecordRepo(db).update(rec)
+                        created_dns_ids.append(new_rec.id)
                         continue
 
-                    repos.DnsRecordRepo(db).create(
+                    new_rec = repos.DnsRecordRepo(db).create(
                         DnsRecord(
                             domain_id=domain.id,
                             name=f"{client.server.name}.direct",
@@ -245,8 +250,16 @@ def propagate_changes(db: Session):
                             managed_by=ManagedBy.SYSTEM,
                         )
                     )
+                    created_dns_ids.append(new_rec.id)
 
             origin_ips.append(origin_ip)
+
+    # # get all that arent in created_dns_ids and delete them
+    # stale_dns_entries = repos.DnsRecordRepo(db).list_all_managed_by(ManagedBy.SYSTEM)
+    # for entry in stale_dns_entries:
+    #     if entry.id not in created_dns_ids:
+    #         print(f"[propagate_changes] Deleting stale DNS entry: {entry.name} ({entry.content})")
+    #         repos.DnsRecordRepo(db).delete(entry)
 
     # Create wildcard DNS records for multi-level subdomains
     print("[propagate_changes] Creating wildcard DNS records for multi-level subdomains...")

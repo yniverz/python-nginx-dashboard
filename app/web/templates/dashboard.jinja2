@@ -223,49 +223,110 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Add route nodes and connect to domains
+    // Group routes by domain first for better positioning
+    const routesByDomain = {};
+    
     visualizationData.routes.forEach(route => {
-        // Convert IDs to numbers for consistent comparison
         const routeDomainId = parseInt(route.domain_id, 10);
-        const routeId = `route-${route.id}`;
-        const domainNode = `domain-${routeDomainId}`;
+        if (!routesByDomain[routeDomainId]) {
+            routesByDomain[routeDomainId] = [];
+        }
+        routesByDomain[routeDomainId].push(route);
+    });
+    
+    // Add route nodes and connect to domains
+    Object.entries(routesByDomain).forEach(([domainId, domainRoutes]) => {
+        domainId = parseInt(domainId, 10); // Ensure numeric
+        const domainNodeId = `domain-${domainId}`;
         
         // Find matching domain using numeric comparison
-        const matchingDomain = visualizationData.domains.find(d => parseInt(d.id, 10) === routeDomainId);
+        const matchingDomain = visualizationData.domains.find(d => parseInt(d.id, 10) === domainId);
         
         // Find the domain node for positioning routes around it
-        const domainNodeIndex = nodes.findIndex(n => n.id === `domain-${routeDomainId}`);
+        const domainNodeIndex = nodes.findIndex(n => n.id === domainNodeId);
         if (domainNodeIndex >= 0) {
             const domainNode = nodes[domainNodeIndex];
-            // Calculate position near its domain with some randomness
-            const angle = Math.random() * 2 * Math.PI;
-            const distance = 60 + Math.random() * 40; // 60-100 pixels from domain
-            nodes.push({
-                id: routeId,
-                type: 'route',
-                name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
-                x: domainNode.x + distance * Math.cos(angle),
-                y: domainNode.y + distance * Math.sin(angle),
-                color: '#2ecc71',
-                domainId: routeDomainId  // Store for reference
+            
+            // First, precompute destinations for routes to cluster similar ones
+            const routeDestinations = {};
+            domainRoutes.forEach(route => {
+                if (route.hosts) {
+                    // Create a sorted string of destination IPs (without ports)
+                    const destinations = route.hosts
+                        .map(host => host.host.split(':')[0])
+                        .filter((value, index, self) => self.indexOf(value) === index) // Unique IPs
+                        .sort()
+                        .join(',');
+                    routeDestinations[route.id] = destinations;
+                } else {
+                    routeDestinations[route.id] = 'unknown';
+                }
+            });
+            
+            // Group routes by destination
+            const routeGroups = {};
+            Object.entries(routeDestinations).forEach(([routeId, dest]) => {
+                if (!routeGroups[dest]) {
+                    routeGroups[dest] = [];
+                }
+                routeGroups[dest].push(routeId);
+            });
+            
+            // Add routes by group, with similar positioning for same group
+            Object.entries(routeGroups).forEach(([destination, routeIds], groupIndex) => {
+                // Base angle for this destination group
+                const groupAngle = (groupIndex / Object.keys(routeGroups).length) * 2 * Math.PI;
+                
+                // Add each route within the group
+                routeIds.forEach((routeId, i) => {
+                    const route = domainRoutes.find(r => r.id.toString() === routeId.toString());
+                    if (!route) return;
+                    
+                    const nodeId = `route-${route.id}`;
+                    
+                    // Calculate position near its domain - use group angle plus small variation
+                    const angleVariation = (i / routeIds.length) * Math.PI / 4; // Max 45° variation within group
+                    const angle = groupAngle + angleVariation - Math.PI/8; // Centered variation
+                    
+                    const distance = 60 + Math.random() * 20; // 60-80 pixels from domain (tighter cluster)
+                    nodes.push({
+                        id: nodeId,
+                        type: 'route',
+                        name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
+                        x: domainNode.x + distance * Math.cos(angle),
+                        y: domainNode.y + distance * Math.sin(angle),
+                        color: '#2ecc71',
+                        domainId: domainId,  // Store for reference
+                        destinations: destination // Store destinations for clustering
+                    });
+                    
+                    // Connect route to domain
+                    links.push({
+                        source: domainNodeId,
+                        target: nodeId
+                    });
+                });
             });
         } else {
             // Fallback if domain node not found
-            nodes.push({
-                id: routeId,
-                type: 'route',
-                name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
-                x: width/2 + (Math.random() - 0.5) * width * 0.5,
-                y: height/2 + (Math.random() - 0.5) * height * 0.5,
-                color: '#2ecc71',
-                domainId: routeDomainId  // Store for reference
+            domainRoutes.forEach(route => {
+                const routeId = `route-${route.id}`;
+                nodes.push({
+                    id: routeId,
+                    type: 'route',
+                    name: `${route.subdomain}.${matchingDomain?.name || 'unknown'}`,
+                    x: width/2 + (Math.random() - 0.5) * width * 0.5,
+                    y: height/2 + (Math.random() - 0.5) * height * 0.5,
+                    color: '#2ecc71',
+                    domainId: domainId  // Store for reference
+                });
+                
+                links.push({
+                    source: domainNodeId,
+                    target: routeId
+                });
             });
         }
-        
-        links.push({
-            source: domainNode,
-            target: routeId
-        });
     });
     
     // Add IP group nodes in a more distant orbit
@@ -688,6 +749,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 else if (nodes[i].type === 'domain' || nodes[j].type === 'domain') {
                     repulsion = domainRepulsion;
                 }
+                // For route-to-route repulsion, check if they share the same domain and IP endpoints
+                else if (nodes[i].type === 'route' && nodes[j].type === 'route') {
+                    // If both routes have the same domain, reduce repulsion
+                    if (nodes[i].domainId === nodes[j].domainId) {
+                        // Find all IPs that each route connects to
+                        const iConnections = new Set();
+                        const jConnections = new Set();
+                        
+                        links.forEach(link => {
+                            if (link.source === nodes[i].id && link.target.startsWith('ip-')) {
+                                iConnections.add(link.target);
+                            }
+                            if (link.source === nodes[j].id && link.target.startsWith('ip-')) {
+                                jConnections.add(link.target);
+                            }
+                        });
+                        
+                        // Check if they share at least one IP connection
+                        let sharedConnections = 0;
+                        iConnections.forEach(conn => {
+                            if (jConnections.has(conn)) sharedConnections++;
+                        });
+                        
+                        // Reduce repulsion for routes with same domain and at least one shared IP
+                        if (sharedConnections > 0) {
+                            repulsion = baseRepulsion * 0.4; // 60% reduction in repulsion
+                        }
+                    }
+                }
                 
                 // Apply size-based adjustment for IP groups (larger groups need more space)
                 if (nodes[i].type === 'ip-group' && nodes[i].routeCount > 3) {
@@ -732,6 +822,47 @@ document.addEventListener('DOMContentLoaded', function() {
                         targetNode.y -= dy * force;
                     }
                 }
+            }
+        });
+        
+        // Group routes that share the same domain and IP destinations
+        // First, create groups of routes by domain and destination IP
+        const routeGroups = {};
+        nodes.filter(node => node.type === 'route').forEach(routeNode => {
+            // Find all IPs this route connects to
+            const connectedIPs = [];
+            links.forEach(link => {
+                if (link.source === routeNode.id) {
+                    const targetNode = nodes.find(n => n.id === link.target);
+                    if (targetNode && targetNode.type === 'ip-group') {
+                        connectedIPs.push(targetNode.id);
+                    }
+                }
+            });
+            
+            // Find the domain this route belongs to
+            const domainId = routeNode.domainId;
+            const groupKey = `${domainId}-${connectedIPs.sort().join('+')}`;
+            
+            if (!routeGroups[groupKey]) {
+                routeGroups[groupKey] = [];
+            }
+            routeGroups[groupKey].push(routeNode);
+        });
+        
+        // Apply cohesion force within each group
+        Object.values(routeGroups).forEach(group => {
+            if (group.length > 1) {
+                // Find center of this group
+                const centerX = group.reduce((sum, node) => sum + node.x, 0) / group.length;
+                const centerY = group.reduce((sum, node) => sum + node.y, 0) / group.length;
+                
+                // Pull routes toward their group center with a gentle force
+                const cohesionForce = 0.05;
+                group.forEach(node => {
+                    node.x += (centerX - node.x) * cohesionForce;
+                    node.y += (centerY - node.y) * cohesionForce;
+                });
             }
         });
         
