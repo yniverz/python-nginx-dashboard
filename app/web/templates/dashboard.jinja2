@@ -998,6 +998,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!animationFrameId) {
                 animationFrameId = requestAnimationFrame(animateForces);
             }
+            
+            // When dragging, we want physics to be more responsive
+            if (window._currentDragNode) {
+                // Force is more responsive during dragging (longer animation time)
+                lastInteractionTime = Date.now() + 1000;
+            }
         };
         
         // Function to apply forces and schedule next frame if needed
@@ -1008,17 +1014,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // During active dragging, only update positions without applying forces
-            if (window._currentDragNode) {
-                // Just update visualization without applying physics
-                createVisualization();
-            } else {
-                // Apply a single iteration of forces when not dragging
-                applyForces();
-                
-                // Update visualization
-                createVisualization();
-            }
+            // Always apply physics - our applyForces function already skips the dragged node
+            applyForces();
+            
+            // Update visualization
+            createVisualization();
             
             // Schedule next frame
             animationFrameId = requestAnimationFrame(animateForces);
