@@ -741,20 +741,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const attraction = 0.02; // Gentle attraction force
         
         for (let i = 0; i < nodes.length; i++) {
-            // Skip the currently dragged node - don't apply physics to it
-            if (window._currentDragNode && nodes[i].id === window._currentDragNode.id) {
-                continue;
-            }
+            // For dragged node, don't update its position but still use it for physics calculations
+            const isNodeDragged = window._currentDragNode && nodes[i].id === window._currentDragNode.id;
             
             // Ensure nodes have valid positions
             nodes[i].x = ensureNumber(nodes[i].x, width / 2);
             nodes[i].y = ensureNumber(nodes[i].y, height / 2);
             
             for (let j = i + 1; j < nodes.length; j++) {
-                // Skip the currently dragged node - don't apply physics to it
-                if (window._currentDragNode && nodes[j].id === window._currentDragNode.id) {
-                    continue;
-                }
+                // We want the dragged node to affect other nodes but not be affected itself
+                const isOtherNodeDragged = window._currentDragNode && nodes[j].id === window._currentDragNode.id;
                 
                 // Ensure nodes have valid positions
                 nodes[j].x = ensureNumber(nodes[j].x, width / 2);
@@ -816,10 +812,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (dist > 0 && dist < repulsion) { // Avoid division by zero
                     // Use a gentler force calculation with damping
                     const force = Math.min(5, (repulsion - dist) / dist * 0.3);
-                    nodes[i].x -= dx * force * 0.5;
-                    nodes[i].y -= dy * force * 0.5;
-                    nodes[j].x += dx * force * 0.5;
-                    nodes[j].y += dy * force * 0.5;
+                    
+                    // Apply forces based on which node is being dragged
+                    if (isNodeDragged) {
+                        // If node i is being dragged, only move node j
+                        nodes[j].x += dx * force;
+                        nodes[j].y += dy * force;
+                    } else if (isOtherNodeDragged) {
+                        // If node j is being dragged, only move node i
+                        nodes[i].x -= dx * force;
+                        nodes[i].y -= dy * force;
+                    } else {
+                        // Normal case - both nodes move
+                        nodes[i].x -= dx * force * 0.5;
+                        nodes[i].y -= dy * force * 0.5;
+                        nodes[j].x += dx * force * 0.5;
+                        nodes[j].y += dy * force * 0.5;
+                    }
                 }
             }
         }
@@ -830,12 +839,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const targetNode = nodes.find(n => n.id === link.target);
             
             if (sourceNode && targetNode) {
-                // Skip if either node is being dragged
-                if (window._currentDragNode && 
-                    (sourceNode.id === window._currentDragNode.id || 
-                     targetNode.id === window._currentDragNode.id)) {
-                    return;
-                }
+                // Check if either node is the dragged node
+                const isSourceDragged = window._currentDragNode && sourceNode.id === window._currentDragNode.id;
+                const isTargetDragged = window._currentDragNode && targetNode.id === window._currentDragNode.id;
                 
                 const dx = targetNode.x - sourceNode.x;
                 const dy = targetNode.y - sourceNode.y;
@@ -849,10 +855,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (dist > idealDistance) {
                         // Apply a maximum force cap to prevent wild movements
                         const force = Math.min(0.2, (dist - idealDistance) * attraction / dist);
-                        sourceNode.x += dx * force;
-                        sourceNode.y += dy * force;
-                        targetNode.x -= dx * force;
-                        targetNode.y -= dy * force;
+                        
+                        // Apply forces differently based on which node is being dragged
+                        if (isSourceDragged) {
+                            // If source is dragged, only move target
+                            targetNode.x -= dx * force * 2; // Double the force to compensate
+                            targetNode.y -= dy * force * 2;
+                        } else if (isTargetDragged) {
+                            // If target is dragged, only move source
+                            sourceNode.x += dx * force * 2; // Double the force to compensate
+                            sourceNode.y += dy * force * 2;
+                        } else {
+                            // Normal case - both nodes move
+                            sourceNode.x += dx * force;
+                            sourceNode.y += dy * force;
+                            targetNode.x -= dx * force;
+                            targetNode.y -= dy * force;
+                        }
                     }
                 }
             }
@@ -886,33 +905,62 @@ document.addEventListener('DOMContentLoaded', function() {
         // Apply cohesion force within each group
         Object.values(routeGroups).forEach(group => {
             if (group.length > 1) {
-                // Find center of this group
+                // Check if any node in the group is being dragged
+                const draggedNode = window._currentDragNode ? 
+                    group.find(node => node.id === window._currentDragNode.id) : null;
+                
+                // Calculate group center (possibly influenced by the dragged node)
                 const centerX = group.reduce((sum, node) => sum + node.x, 0) / group.length;
                 const centerY = group.reduce((sum, node) => sum + node.y, 0) / group.length;
                 
                 // Pull routes toward their group center with a gentle force
                 const cohesionForce = 0.05;
                 group.forEach(node => {
-                    // Skip the node being dragged
-                    if (window._currentDragNode && node.id === window._currentDragNode.id) {
+                    // If this node is being dragged, skip moving it but it still influences others
+                    if (draggedNode && node.id === draggedNode.id) {
                         return;
                     }
-                    node.x += (centerX - node.x) * cohesionForce;
-                    node.y += (centerY - node.y) * cohesionForce;
+                    
+                    // If there's a dragged node in this group, increase cohesion for better following
+                    const actualForce = draggedNode ? cohesionForce * 1.5 : cohesionForce;
+                    
+                    node.x += (centerX - node.x) * actualForce;
+                    node.y += (centerY - node.y) * actualForce;
                 });
             }
         });
         
         // Center force - very gently pull nodes toward the center if they're far out
         const centerForce = 0.005; // Reduced from 0.01 for gentler centering
+        
+        // If a node is being dragged far from center, adjust the center of gravity
+        let centerX = width/2;
+        let centerY = height/2;
+        
+        // If dragging a node, make it influence the center of gravity
+        if (window._currentDragNode) {
+            const dragNode = window._currentDragNode;
+            const dragDistFromCenter = Math.sqrt(
+                Math.pow(dragNode.x - width/2, 2) + 
+                Math.pow(dragNode.y - height/2, 2)
+            );
+            
+            // If dragged node is far from center, have it pull other nodes slightly
+            if (dragDistFromCenter > width/4) {
+                // Weighted average: 80% original center, 20% dragged node position
+                centerX = width/2 * 0.8 + dragNode.x * 0.2;
+                centerY = height/2 * 0.8 + dragNode.y * 0.2;
+            }
+        }
+        
         nodes.forEach(node => {
-            // Skip the node being dragged
+            // Skip the node being dragged - it's controlled by the user
             if (window._currentDragNode && node.id === window._currentDragNode.id) {
                 return;
             }
             
-            const dx = width/2 - node.x;
-            const dy = height/2 - node.y;
+            const dx = centerX - node.x;
+            const dy = centerY - node.y;
             const distFromCenter = Math.sqrt(dx*dx + dy*dy);
             
             if (distFromCenter > width/3) {
