@@ -602,6 +602,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Add dragging class for styling
                 nodeElement.classList.add('dragging');
+                
+                // Ensure we update the animation state for interactive forces
+                if (window.updateLastInteractionTime) {
+                    window.updateLastInteractionTime();
+                }
             });
         });
             
@@ -662,6 +667,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const draggedNode = window._currentDragNode;
                 
                 if (draggedNode) {
+                    // Mark that we're manually positioning this node
+                    draggedNode._manuallyPositioned = true;
+                    
                     // Calculate new position with the stored offset
                     draggedNode.x = ensureNumber(svgPoint.x - window._dragOffset.x);
                     draggedNode.y = ensureNumber(svgPoint.y - window._dragOffset.y);
@@ -673,6 +681,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Update only node positions without full re-render
                     throttledUpdate();
+                    
+                    // Use our global function to update time and start animation if needed
+                    if (window.updateLastInteractionTime) {
+                        window.updateLastInteractionTime();
+                    }
                 }
             });
             
@@ -680,6 +693,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.addEventListener('mouseup', () => {
                 // Only process if we were dragging
                 if (window._currentDragNode) {
+                    // Clear the manually positioned flag
+                    window._currentDragNode._manuallyPositioned = false;
+                    
                     // A full re-render once dragging ends
                     createVisualization();
                 }
@@ -725,11 +741,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const attraction = 0.02; // Gentle attraction force
         
         for (let i = 0; i < nodes.length; i++) {
+            // Skip the currently dragged node - don't apply physics to it
+            if (window._currentDragNode && nodes[i].id === window._currentDragNode.id) {
+                continue;
+            }
+            
             // Ensure nodes have valid positions
             nodes[i].x = ensureNumber(nodes[i].x, width / 2);
             nodes[i].y = ensureNumber(nodes[i].y, height / 2);
             
             for (let j = i + 1; j < nodes.length; j++) {
+                // Skip the currently dragged node - don't apply physics to it
+                if (window._currentDragNode && nodes[j].id === window._currentDragNode.id) {
+                    continue;
+                }
+                
                 // Ensure nodes have valid positions
                 nodes[j].x = ensureNumber(nodes[j].x, width / 2);
                 nodes[j].y = ensureNumber(nodes[j].y, height / 2);
@@ -804,6 +830,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const targetNode = nodes.find(n => n.id === link.target);
             
             if (sourceNode && targetNode) {
+                // Skip if either node is being dragged
+                if (window._currentDragNode && 
+                    (sourceNode.id === window._currentDragNode.id || 
+                     targetNode.id === window._currentDragNode.id)) {
+                    return;
+                }
+                
                 const dx = targetNode.x - sourceNode.x;
                 const dy = targetNode.y - sourceNode.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -860,6 +893,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Pull routes toward their group center with a gentle force
                 const cohesionForce = 0.05;
                 group.forEach(node => {
+                    // Skip the node being dragged
+                    if (window._currentDragNode && node.id === window._currentDragNode.id) {
+                        return;
+                    }
                     node.x += (centerX - node.x) * cohesionForce;
                     node.y += (centerY - node.y) * cohesionForce;
                 });
@@ -869,6 +906,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Center force - very gently pull nodes toward the center if they're far out
         const centerForce = 0.005; // Reduced from 0.01 for gentler centering
         nodes.forEach(node => {
+            // Skip the node being dragged
+            if (window._currentDragNode && node.id === window._currentDragNode.id) {
+                return;
+            }
+            
             const dx = width/2 - node.x;
             const dy = height/2 - node.y;
             const distFromCenter = Math.sqrt(dx*dx + dy*dy);
@@ -884,6 +926,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Keep nodes within bounds and ensure valid values with padding
         const padding = 80; // Increased from 50
         nodes.forEach(node => {
+            // Skip the node being dragged - it's already bounded in the mousemove handler
+            if (window._currentDragNode && node.id === window._currentDragNode.id) {
+                return;
+            }
+            
             node.x = Math.max(padding, Math.min(width - padding, ensureNumber(node.x, width/2)));
             node.y = Math.max(padding, Math.min(height - padding, ensureNumber(node.y, height/2)));
         });
@@ -943,6 +990,16 @@ document.addEventListener('DOMContentLoaded', function() {
         let lastInteractionTime = Date.now();
         const interactionTimeout = 2000; // Stop animation 2 seconds after last interaction
         
+        // Global function to update interaction time and start animation if needed
+        window.updateLastInteractionTime = function() {
+            lastInteractionTime = Date.now();
+            
+            // Start animation if not already running
+            if (!animationFrameId) {
+                animationFrameId = requestAnimationFrame(animateForces);
+            }
+        };
+        
         // Function to apply forces and schedule next frame if needed
         function animateForces() {
             // Check if we should stop animation (no recent interaction)
@@ -951,11 +1008,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Apply a single iteration of forces
-            applyForces();
-            
-            // Update visualization
-            createVisualization();
+            // During active dragging, only update positions without applying forces
+            if (window._currentDragNode) {
+                // Just update visualization without applying physics
+                createVisualization();
+            } else {
+                // Apply a single iteration of forces when not dragging
+                applyForces();
+                
+                // Update visualization
+                createVisualization();
+            }
             
             // Schedule next frame
             animationFrameId = requestAnimationFrame(animateForces);
@@ -964,26 +1027,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Start animation when a node is dragged
         document.addEventListener('mousemove', function() {
             if (window._currentDragNode) {
-                // Update last interaction time
-                lastInteractionTime = Date.now();
-                
-                // Start animation if not already running
-                if (!animationFrameId) {
-                    animationFrameId = requestAnimationFrame(animateForces);
-                }
+                // Use our global function to update time and start animation if needed
+                window.updateLastInteractionTime();
             }
         });
         
         // Also start animation when a node is released
         document.addEventListener('mouseup', function() {
             if (window._isDragging) {
-                // Update last interaction time
-                lastInteractionTime = Date.now();
-                
-                // Start animation if not already running
-                if (!animationFrameId) {
-                    animationFrameId = requestAnimationFrame(animateForces);
-                }
+                // Use our global function to update time and start animation if needed
+                window.updateLastInteractionTime();
             }
         });
     }
