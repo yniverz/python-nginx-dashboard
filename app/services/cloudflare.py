@@ -482,7 +482,7 @@ class CloudFlareOriginCAManager:
             id=cert.id,
             expires=datetime.datetime.strptime(cert.expires_on.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S %z"),
             certificate=cert.certificate,
-            private_key=cert.private_key
+            private_key="" # cert.private_key
         )
 
         print(f"[Origin-CA] issued cert id={cert.id} "
