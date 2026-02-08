@@ -517,8 +517,10 @@ class CloudFlareOriginCAManager:
         crt_p.write_text(entry.certificate)
         os.chmod(crt_p, 0o600)
         
-        key_p.write_text(entry.private_key)
-        os.chmod(key_p, 0o600)
+        # Only write private key if it's provided (not empty from API)
+        if entry.private_key:
+            key_p.write_text(entry.private_key)
+            os.chmod(key_p, 0o600)
 
         return str(crt_p), str(key_p)
 
