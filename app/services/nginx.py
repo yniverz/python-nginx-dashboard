@@ -120,18 +120,19 @@ server {{
     def _generate_http_subdomain_blocks(self):   
         """
         Generate HTTPS server blocks for each subdomain with SSL certificates.
-        Groups routes by subdomain and creates server blocks with upstream load balancing.
+        Groups routes by subdomain and domain to create separate server blocks per domain.
         """
         subdomain_blocks = ""
 
         routes = repos.NginxRouteRepo(self.db).list_all_active()
 
-        # Group routes by subdomain
+        # Group routes by both subdomain and domain
         subdomains = {}
         for route in routes:
-            subdomains.setdefault(route.subdomain, []).append(route)
+            key = (route.subdomain, route.domain.id)
+            subdomains.setdefault(key, []).append(route)
 
-        for subdomain, routes in subdomains.items():
+        for (subdomain, domain_id), routes in subdomains.items():
             domain = routes[0].domain
             path_blocks, upstream_blocks = self._generate_http_path_blocks(routes)
 
