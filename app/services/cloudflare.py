@@ -138,7 +138,7 @@ class SharedRecordType:
     name: str
     type: str
     content: str
-    proxied: bool = field(compare=False, hash=False, default=False)
+    proxied: bool = field(compare=False, hash=False)
     managed_by: str = field(compare=False, hash=False)
     record_id: Union[int, str] = field(compare=False, hash=False, default=None)
 
