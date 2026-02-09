@@ -25,6 +25,7 @@ class Domain(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True)  # Domain name (e.g., "example.com")
     auto_wildcard: Mapped[bool] = mapped_column(Boolean, default=False)  # Auto-generate wildcard DNS records
     use_for_direct_prefix: Mapped[bool] = mapped_column(Boolean, default=False)  # Create direct.* subdomains
+    dns_proxy_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # Allow Cloudflare proxy for this domain
 
 class DnsRecord(Base):
     """DNS record for a domain."""

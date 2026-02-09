@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from app.config import settings
-from app.persistence.db import get_db, Base, engine
+from app.persistence.db import get_db, ensure_schema
 from app.persistence import repos
 from app.persistence.models import (
     Domain, GatewayClient, GatewayConnection, GatewayFlag, GatewayProtocol, GatewayServer, NginxRoute,
@@ -48,8 +48,8 @@ templates.env.filters["pprint"] = lambda obj: json.dumps(obj, indent=2, cls=Mode
 
 router = APIRouter()
 
-# Ensure database tables exist
-Base.metadata.create_all(bind=engine)
+# Ensure database tables exist and apply migrations
+ensure_schema()
 
 
 
@@ -347,6 +347,12 @@ async def edit_domain(request: Request, domain_id: int, action: str, db: Session
             domain = repos.DomainRepo(db).get(domain_id)
             if domain:
                 domain.use_for_direct_prefix = not domain.use_for_direct_prefix
+                repos.DomainRepo(db).update(domain)
+        elif action == "toggle_dns_proxy":
+            # Toggle the DNS proxy setting
+            domain = repos.DomainRepo(db).get(domain_id)
+            if domain:
+                domain.dns_proxy_enabled = not domain.dns_proxy_enabled
                 repos.DomainRepo(db).update(domain)
         elif action == "delete":
             if not repos.NginxRouteRepo(db).exists_with_domain_id(domain_id):

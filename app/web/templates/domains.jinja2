@@ -11,16 +11,17 @@
 <br>
 
 <table>
-  <tr><th>Name</th><th>Auto Wildcard</th><th>Use for Direct Prefix</th><th></th></tr>
+  <tr><th>Name</th><th>Auto Wildcard</th><th>Use for Direct Prefix</th><th>DNS Proxy</th><th></th></tr>
   {% for d in domains %}
   <tr>
     <td>{{ d.name }}</td>
     <td><a href="{{ url_for('edit_domain', domain_id=d.id, action='toggle_auto_wildcard') }}">{{ d.auto_wildcard }}</a></td>
     <td><a href="{{ url_for('edit_domain', domain_id=d.id, action='toggle_use_for_direct_prefix') }}">{{ d.use_for_direct_prefix }}</a></td>
+    <td><a href="{{ url_for('edit_domain', domain_id=d.id, action='toggle_dns_proxy') }}">{{ d.dns_proxy_enabled }}</a></td>
     <td><a href="{{ url_for('edit_domain', domain_id=d.id, action='delete') }}">Remove</a></td>
   </tr>
   {% endfor %}
-  {% if not domains %}<tr><td colspan="4" class="muted">No domains yet</td></tr>{% endif %}
+  {% if not domains %}<tr><td colspan="5" class="muted">No domains yet</td></tr>{% endif %}
 </table>
 
 {% endblock %}

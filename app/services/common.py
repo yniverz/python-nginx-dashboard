@@ -130,6 +130,11 @@ def propagate_changes(db: Session):
     print(f"[propagate_changes] Processing {len(clients)} gateway clients...")
 
     created_dns_ids = []
+    def apply_domain_proxy(domain, desired: bool) -> bool:
+        if hasattr(domain, "dns_proxy_enabled") and not domain.dns_proxy_enabled:
+            return False
+        return desired
+
     for client in clients:
         print(f"[propagate_changes] Processing client: {client.server.name} ({client.server.host}), is_origin: {client.is_origin}")
         if client.is_origin:
@@ -295,7 +300,7 @@ def propagate_changes(db: Session):
                 )
                 if exists_id:
                     rec = repos.DnsRecordRepo(db).get(exists_id)
-                    rec.proxied = True
+                    rec.proxied = apply_domain_proxy(route.domain, True)
                     rec.managed_by = ManagedBy.SYSTEM
                     repos.DnsRecordRepo(db).update(rec)
                     continue
@@ -305,7 +310,7 @@ def propagate_changes(db: Session):
                         name=f"*.{without_last}",
                         type="A",
                         content=ip,
-                        proxied=True,
+                        proxied=apply_domain_proxy(route.domain, True),
                         managed_by=ManagedBy.SYSTEM,
                     )
                 )
@@ -331,7 +336,7 @@ def propagate_changes(db: Session):
                 if exists_id:
                     print(f"[propagate_changes] Updating existing root DNS record: {domain.name} -> {ip}")
                     rec = repos.DnsRecordRepo(db).get(exists_id)
-                    rec.proxied = True
+                    rec.proxied = apply_domain_proxy(domain, True)
                     rec.managed_by = ManagedBy.SYSTEM
                     repos.DnsRecordRepo(db).update(rec)
                 else:
@@ -342,7 +347,7 @@ def propagate_changes(db: Session):
                             name=f"@",
                             type="A",
                             content=ip,
-                            proxied=True,
+                            proxied=apply_domain_proxy(domain, True),
                             managed_by=ManagedBy.SYSTEM,
                         )
                     )
@@ -358,7 +363,7 @@ def propagate_changes(db: Session):
                 if exists_id:
                     print(f"[propagate_changes] Updating existing wildcard DNS record: *.{domain.name} -> {ip}")
                     rec = repos.DnsRecordRepo(db).get(exists_id)
-                    rec.proxied = True
+                    rec.proxied = apply_domain_proxy(domain, True)
                     rec.managed_by = ManagedBy.SYSTEM
                     repos.DnsRecordRepo(db).update(rec)
                     continue
@@ -370,7 +375,7 @@ def propagate_changes(db: Session):
                         name=f"*",
                         type="A",
                         content=ip,
-                        proxied=True,
+                        proxied=apply_domain_proxy(domain, True),
                         managed_by=ManagedBy.SYSTEM,
                     )
                 )

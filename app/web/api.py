@@ -6,14 +6,14 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
-from app.persistence.db import get_db, Base, engine
+from app.persistence.db import get_db, ensure_schema
 from app.persistence import repos
 from app.services.frp import generate_server_toml, generate_client_toml
 
 router = APIRouter(prefix="/api")
 
-# Ensure database tables exist
-Base.metadata.create_all(bind=engine)
+# Ensure database tables exist and apply migrations
+ensure_schema()
 
 @router.get("/gateway/server/{server_id}", response_class=PlainTextResponse)
 def get_gateway_server(server_id: str, request: Request, db: Session = Depends(get_db), x_gateway_token: str | None = Header(None)):

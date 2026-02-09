@@ -2,7 +2,7 @@
 Database configuration and session management.
 Provides SQLAlchemy engine, session factory, and context managers for database operations.
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, scoped_session
 from app.config import settings
 
@@ -15,6 +15,22 @@ engine = create_engine(f"sqlite:///{settings.db_path()}", echo=False, future=Tru
 
 # Create scoped session factory for thread-safe database sessions
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
+
+
+def ensure_schema() -> None:
+    """
+    Ensure database schema exists and apply lightweight migrations for new columns.
+    """
+    Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        if "domains" not in inspector.get_table_names():
+            return
+
+        domain_columns = {col["name"] for col in inspector.get_columns("domains")}
+        if "dns_proxy_enabled" not in domain_columns:
+            conn.execute(text("ALTER TABLE domains ADD COLUMN dns_proxy_enabled BOOLEAN NOT NULL DEFAULT 1"))
 
 
 class DBSession:
