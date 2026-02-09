@@ -138,7 +138,7 @@ class SharedRecordType:
     name: str
     type: str
     content: str
-    proxied: bool
+    proxied: bool = field(compare=False, hash=False, default=False)
     managed_by: str = field(compare=False, hash=False)
     record_id: Union[int, str] = field(compare=False, hash=False, default=None)
 
@@ -201,7 +201,7 @@ class CloudFlareManager:
 
                 # Check if this record already exists locally (user or system managed)
                 existing_local = next((e for e in self.cf_cache.local_entries if e == shared_rec), 
-                                      next((e for e in self.cf_cache.local_archived if e == shared_rec), None))
+                                 next((e for e in self.cf_cache.local_archived if e == shared_rec), None))
                 if existing_local:
                     # Preserve the existing management type
                     shared_rec = replace(shared_rec, managed_by=existing_local.managed_by)
