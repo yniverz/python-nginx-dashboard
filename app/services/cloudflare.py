@@ -317,7 +317,7 @@ class CloudFlareManager:
     def _get_shared_record_from_db(self, record: Union[DnsRecord, DnsRecordArchive]) -> SharedRecordType:
         name = self._get_fqdn(record)
         return SharedRecordType(
-            domain=record.domain_id,
+            domain=repos.DomainRepo(self.db).get(record.domain_id).name,
             name=name,
             type=record.type.name,
             content=record.content,
@@ -351,8 +351,8 @@ class CloudFlareManager:
                 return zone
         return None
 
-    def _get_cf_record_id(self, record: DnsRecord) -> tuple[int | str | None, str | None]:
-        zone = self._get_zone(record.domain.name)
+    def _get_cf_record_id(self, record: Union[DnsRecord, DnsRecordArchive]) -> tuple[int | str | None, str | None]:
+        zone = self._get_zone(repos.DomainRepo(self.db).get(record.domain_id).name)
         if not zone:
             return None, None
         for entry in self.cf_cache.entries_by_zone.get(zone.id, []):
