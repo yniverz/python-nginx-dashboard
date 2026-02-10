@@ -41,8 +41,8 @@ class DnsRecord(Base):
     managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy), default=ManagedBy.USER)
     meta: Mapped[dict | None] = mapped_column(JSON, default=dict)  # Additional metadata
 
-    # Ensure unique DNS records per domain
-    __table_args__ = (UniqueConstraint("domain_id", "name", "type", "content", name="uq_dns_key"),)
+    # Ensure unique DNS records per domain (including proxied status)
+    __table_args__ = (UniqueConstraint("domain_id", "name", "type", "content", "proxied", name="uq_dns_key"),)
 
     domain: Mapped[Domain] = relationship(backref="dns_records", lazy="joined")
 

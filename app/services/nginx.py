@@ -2,6 +2,7 @@
 Nginx configuration generation service.
 Generates nginx configuration files for HTTP/HTTPS proxying and load balancing.
 """
+import os
 from requests import Session
 from app.persistence import repos
 from app.persistence.models import NginxRoute, NginxRouteHost, NginxRouteProtocol
@@ -168,6 +169,11 @@ server {{
                 dir_name = f"{label_key}{domain.name}"
                 crt_path = f"{settings.CF_SSL_DIR}/{dir_name}/fullchain.pem"
                 key_path = f"{settings.CF_SSL_DIR}/{dir_name}/privkey.pem"
+
+            # if paths dont exist, skip generating this server block (certificate not available)
+            if not os.path.isfile(crt_path) or not os.path.isfile(key_path):
+                print(f"  ⚠️  SSL certificate not found for {subdomain + '.' if subdomain != '@' else ''}{domain.name}, skipping HTTPS server block")
+                continue
 
             # Generate HTTPS server block with SSL and proxy configuration
             subdomain_blocks += f"""
