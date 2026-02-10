@@ -441,7 +441,7 @@ class LetsEncryptManager:
         try:
             # Poll for authorization status
             authz_resource = client.poll(authz)
-            if authz_resource.body.status != messages.STATUS_VALID:
+            if authz_resource[0].body.status != messages.STATUS_VALID:
                 raise ValueError(f"Authorization failed for {authz.body.identifier.value}")
             print(f"    ✓ Challenge validated for {authz.body.identifier.value}")
         finally:
