@@ -62,7 +62,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from acme import challenges, client, crypto_util, messages
+from acme import challenges, client, crypto_util, messages, errors
 from acme.client import ClientV2
 from josepy import JWKRSA, ComparableRSAKey
 import josepy
@@ -189,7 +189,21 @@ class LetsEncryptManager:
                 email=settings.LE_EMAIL,
                 terms_of_service_agreed=True
             )
-            regr = self.acme_client.new_account(new_reg)
+            
+            try:
+                regr = self.acme_client.new_account(new_reg)
+                print(f"[Let's Encrypt] Registered new account with email: {settings.LE_EMAIL}")
+            except errors.ConflictError as e:
+                # Account already exists, query it using the URI from the error
+                account_uri = e.args[0] if e.args else None
+                if not account_uri:
+                    raise ValueError("Account exists but URI not found in ConflictError") from e
+                
+                regr = self.acme_client.query_registration(messages.RegistrationResource(
+                    uri=account_uri,
+                    body=messages.Registration()
+                ))
+                print(f"[Let's Encrypt] Using existing account: {account_uri}")
             
             # Save registration details
             reg_data = {
@@ -200,8 +214,6 @@ class LetsEncryptManager:
             with open(account_reg_path, 'w') as f:
                 json.dump(reg_data, f, indent=2)
             os.chmod(account_reg_path, 0o600)
-            
-            print(f"[Let's Encrypt] Registered new account with email: {settings.LE_EMAIL}")
 
         return self.acme_client
 
