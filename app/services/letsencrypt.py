@@ -195,7 +195,8 @@ class LetsEncryptManager:
                 print(f"[Let's Encrypt] Registered new account with email: {settings.LE_EMAIL}")
             except errors.ConflictError as e:
                 # Account already exists, query it using the URI from the error
-                account_uri = e.args[0] if e.args else None
+                # The ConflictError contains the account location URI
+                account_uri = str(e) if e.args else None
                 if not account_uri:
                     raise ValueError("Account exists but URI not found in ConflictError") from e
                 
