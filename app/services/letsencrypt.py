@@ -302,7 +302,7 @@ class LetsEncryptManager:
             # Retry certbot with HTTP-only config
             print(f"  🔁 Retrying certbot with HTTP-only config...")
             success = self._run_certbot(primary_domain, domains)
-            
+
             # Restore original nginx config
             if Path(backup_config_path).exists():
                 print(f"  📥 Restoring original nginx config...")
@@ -373,6 +373,7 @@ server {{
 
     def _restore_nginx_config(self, backup_path: str):
         """Restore nginx config from backup."""
+        return # FIXME: OPnly for Debugging, remove this line to enable restore functionality
         try:
             subprocess.run(['mv', backup_path, settings.NGINX_HTTP_CONF_PATH], check=True)
             print(f"  ✓ Nginx config restored from backup")
