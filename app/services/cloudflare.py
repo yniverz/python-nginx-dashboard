@@ -206,6 +206,7 @@ class CloudFlareManager:
                     # Preserve the existing management type
                     shared_rec = replace(shared_rec, managed_by=existing_local.managed_by)
                 else:
+                    print("##### Creating record", entry.name, entry.content)
                     # Import as new record
                     repos.DnsRecordRepo(self.db).create(
                         DnsRecord(
