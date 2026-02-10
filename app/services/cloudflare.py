@@ -296,7 +296,8 @@ class CloudFlareManager:
                      r.domain.name == shared.domain and
                      self._get_fqdn(r) == shared.name and
                      r.type == shared.type and
-                     r.content == shared.content), None)
+                     r.content == shared.content and
+                     r.proxied == shared.proxied), None)
 
     def _get_shared_record_from_db(self, record: DnsRecord) -> SharedRecordType:
         name = self._get_fqdn(record)
@@ -305,7 +306,7 @@ class CloudFlareManager:
             name=name,
             type=record.type.name,
             content=record.content,
-            proxied=record.proxied if hasattr(record, 'proxied') else False,
+            proxied=record.proxied,
             managed_by=record.managed_by,
         )
 
@@ -339,7 +340,7 @@ class CloudFlareManager:
         if not zone:
             return None, None
         for entry in self.cf_cache.entries_by_zone.get(zone.id, []):
-            if entry.name == self._get_fqdn(record) and entry.type == record.type and entry.content == record.content:
+            if entry.name == self._get_fqdn(record) and entry.type == record.type and entry.content == record.content and entry.proxied == record.proxied:
                 return entry.id, zone.id
         return None, None
 
