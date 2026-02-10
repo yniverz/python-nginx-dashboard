@@ -182,6 +182,10 @@ class CloudFlareManager:
         - Removes archived records from Cloudflare
         """
 
+        print("##### Local records before sync:")
+        for e in repos.DnsRecordRepo(self.db).list_archived():
+            print("     ", e.domain_id, e.domain.name, e.name, e.type, e.content, e.proxied, e.managed_by)
+
         # Load local records (excluding previously imported ones)
         self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
         self.cf_cache.local_archived.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_archived() if e.managed_by != ManagedBy.IMPORTED])
