@@ -240,24 +240,27 @@ class DnsRecordRepo:
         """
         insp = inspect(rec)
 
-        # Helper function to get the previous value of an attribute
+        # Helper function to get the original database value
         def old_val(attr):
             h = getattr(insp.attrs, attr).history
-            if h.deleted:    # Value before the last assignment
-                return h.deleted[0]
-            if h.unchanged:  # Loaded-from-DB value (if never changed)
+            # Check for unchanged first - this is the DB value
+            if h.unchanged:
                 return h.unchanged[0]
-            return None      # Wasn't loaded; unlikely for scalar columns
+            # If deleted exists and no unchanged, use deleted
+            # (means value was set before ever being loaded)
+            if h.deleted:
+                return h.deleted[0]
+            return None
 
         # Check if any tracked fields have changed
-        fields = ["name", "type", "content", "ttl", "proxied"]
+        fields = ["name", "type", "content", "ttl", "priority", "proxied"]
         changed = any(getattr(insp.attrs, f).history.has_changes() for f in fields)
 
         if changed:
             # Create archive record from the old values before updating
             snap = DnsRecord(
                 id=rec.id,
-                domain_id=old_val("domain_id"),
+                domain_id=rec.domain_id,
                 name=old_val("name"),
                 type=old_val("type"),
                 content=old_val("content"),
