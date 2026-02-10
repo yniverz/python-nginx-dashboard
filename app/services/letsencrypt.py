@@ -129,8 +129,9 @@ class LetsEncryptManager:
         if self.acme_client:
             return self.acme_client
 
-        # Account key path
+        # Account paths
         account_key_path = Path(settings.LE_SSL_DIR, "account", "account.key")
+        account_reg_path = Path(settings.LE_SSL_DIR, "account", "registration.json")
         
         # Load or generate account key
         if account_key_path.exists():
@@ -168,28 +169,41 @@ class LetsEncryptManager:
         directory = messages.Directory.from_json(net.get(directory_url).json())
         self.acme_client = ClientV2(directory, net=net)
 
-        # Register account if needed
-        if not self._is_account_registered():
+        # Register or query existing account
+        if account_reg_path.exists():
+            # Load existing account registration
+            with open(account_reg_path, 'r') as f:
+                reg_data = json.load(f)
+            # Query the account to set it in the client
+            regr = self.acme_client.query_registration(messages.RegistrationResource(
+                uri=reg_data['uri'],
+                body=messages.Registration()
+            ))
+            print(f"[Let's Encrypt] Using existing account: {reg_data['uri']}")
+        else:
+            # Register new account
             if not settings.LE_EMAIL:
                 raise ValueError("LE_EMAIL must be set for Let's Encrypt account registration")
             
-            registration = messages.NewRegistration.from_data(
+            new_reg = messages.NewRegistration.from_data(
                 email=settings.LE_EMAIL,
                 terms_of_service_agreed=True
             )
-            try:
-                self.acme_client.new_account(registration)
-                print(f"[Let's Encrypt] Registered new account with email: {settings.LE_EMAIL}")
-            except Exception as e:
-                print(f"[Let's Encrypt] Account registration error (may already exist): {e}")
+            regr = self.acme_client.new_account(new_reg)
+            
+            # Save registration details
+            reg_data = {
+                'uri': regr.uri,
+                'email': settings.LE_EMAIL,
+                'created_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+            with open(account_reg_path, 'w') as f:
+                json.dump(reg_data, f, indent=2)
+            os.chmod(account_reg_path, 0o600)
+            
+            print(f"[Let's Encrypt] Registered new account with email: {settings.LE_EMAIL}")
 
         return self.acme_client
-
-    def _is_account_registered(self) -> bool:
-        """Check if account is already registered."""
-        account_key_path = Path(settings.LE_SSL_DIR, "account", "account.key")
-        account_reg_path = Path(settings.LE_SSL_DIR, "account", "registration.json")
-        return account_key_path.exists() and account_reg_path.exists()
 
     def sync(self):
         """
@@ -440,7 +454,7 @@ class LetsEncryptManager:
         # Wait for challenge validation
         try:
             # Poll for authorization status
-            authz_resource = client.poll(authz)
+            authz_resource = client.poll(authz) # (method) def poll(authzr: AuthorizationResource) -> Tuple[AuthorizationResource, Response]
             if authz_resource[0].body.status != messages.STATUS_VALID:
                 raise ValueError(f"Authorization failed for {authz.body.identifier.value}")
             print(f"    ✓ Challenge validated for {authz.body.identifier.value}")
