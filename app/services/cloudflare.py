@@ -226,6 +226,9 @@ class CloudFlareManager:
 
 
         # go through archived records and see if they still exist, if yes, delete first.
+        print("##### Listing archived")
+        for e in repos.DnsRecordRepo(self.db).list_archived():
+            print("    ", e.name, e.type, e.content, e.proxied, e.managed_by)
         for entry in repos.DnsRecordRepo(self.db).list_archived():
             print("remove ", entry.name)
             shared_rec = self._get_shared_record_from_db(entry)
