@@ -21,7 +21,7 @@ import subprocess
 import ipaddress
 from app.config import settings
 from app.persistence import repos
-from app.persistence.models import DnsRecord, DnsType, Domain, ManagedBy
+from app.persistence.models import DnsRecord, DnsRecordArchive, DnsType, Domain, ManagedBy
 
 
 
@@ -314,10 +314,10 @@ class CloudFlareManager:
                      r.content == shared.content and
                      r.proxied == shared.proxied), None)
 
-    def _get_shared_record_from_db(self, record: DnsRecord) -> SharedRecordType:
+    def _get_shared_record_from_db(self, record: Union[DnsRecord, DnsRecordArchive]) -> SharedRecordType:
         name = self._get_fqdn(record)
         return SharedRecordType(
-            domain=record.domain.name,
+            domain=record.domain_id,
             name=name,
             type=record.type.name,
             content=record.content,
@@ -325,8 +325,9 @@ class CloudFlareManager:
             managed_by=record.managed_by,
         )
 
-    def _get_fqdn(self, record: DnsRecord) -> str:
-        return f"{record.name}.{record.domain.name}" if record.name != "@" else record.domain.name
+    def _get_fqdn(self, record: Union[DnsRecord, DnsRecordArchive]) -> str:
+        domain = repos.DomainRepo(self.db).get(record.domain_id)
+        return f"{record.name}.{domain.name}" if record.name != "@" else domain.name
 
     def _get_shared_record_from_cf(self, domain: str, record) -> SharedRecordType:
         if record.type == DnsType.SRV.value:
