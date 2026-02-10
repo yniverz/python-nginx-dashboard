@@ -10,7 +10,7 @@ from requests import Session
 from app.config import settings
 from app.persistence import repos
 from app.persistence.db import DBSession
-from app.persistence.models import DnsRecord, GatewayConnection, GatewayProtocol, ManagedBy
+from app.persistence.models import DnsRecord, Domain, GatewayConnection, GatewayProtocol, ManagedBy
 from app.services.cloudflare import CloudFlareManager, CloudFlareOriginCAManager
 from app.services.letsencrypt import LetsEncryptManager
 from app.services.nginx import NginxConfigGenerator
@@ -136,8 +136,8 @@ def propagate_changes(db: Session):
     print(f"[propagate_changes] Processing {len(clients)} gateway clients...")
 
     created_dns_ids = []
-    def apply_domain_proxy(domain, desired: bool) -> bool:
-        if hasattr(domain, "dns_proxy_enabled") and not domain.dns_proxy_enabled:
+    def apply_domain_proxy(domain: Domain, desired: bool) -> bool:
+        if not domain.dns_proxy_enabled:
             return False
         return desired
 

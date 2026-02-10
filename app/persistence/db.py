@@ -77,6 +77,8 @@ def ensure_schema() -> None:
     """
     Base.metadata.create_all(bind=engine)
 
+    return
+
     with engine.begin() as conn:
         inspector = inspect(conn)
         if "domains" not in inspector.get_table_names():
