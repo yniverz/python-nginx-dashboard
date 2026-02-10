@@ -1,0 +1,526 @@
+"""
+Let's Encrypt SSL certificate management service.
+Handles ACME protocol communication, certificate issuance, renewal, and validation.
+
+Configuration:
+--------------
+Add the following settings to your .env file:
+
+    # Let's Encrypt Configuration
+    ENABLE_LETSENCRYPT=true                    # Enable Let's Encrypt SSL management
+    LE_EMAIL=your-email@example.com            # Required: Email for Let's Encrypt account
+    LE_PRODUCTION=false                        # Use staging server for testing (recommended initially)
+    LE_SSL_DIR=/etc/nginx/ssl-le               # Directory for Let's Encrypt certificates
+    LE_ACME_DIR=/var/www/challenges            # Directory for ACME challenge files
+    LE_RENEW_SOON=30                           # Renew certificates X days before expiry
+
+Important Notes:
+----------------
+1. Start with LE_PRODUCTION=false to test with Let's Encrypt staging server
+   (staging certs won't be trusted by browsers but won't hit rate limits)
+
+2. The LE_ACME_DIR directory must be accessible by nginx and writable by the application
+
+3. Ensure your domains are publicly accessible on port 80 for HTTP-01 challenge validation
+
+4. Rate limits (production):
+   - 50 certificates per registered domain per week
+   - 5 duplicate certificates per week
+   - See: https://letsencrypt.org/docs/rate-limits/
+
+5. Nginx will automatically serve ACME challenges from /.well-known/acme-challenge/
+
+Setup Instructions:
+-------------------
+1. Create the ACME challenge directory:
+   sudo mkdir -p /var/www/challenges
+   sudo chown -R $USER:$USER /var/www/challenges
+
+2. Create the SSL directory:
+   sudo mkdir -p /etc/nginx/ssl-le
+   sudo chown -R $USER:$USER /etc/nginx/ssl-le
+
+3. Ensure your DNS records point to your server's public IP
+
+4. Enable Let's Encrypt in your .env file and run the publish job
+
+5. Once certificates are working with staging, switch to production:
+   LE_PRODUCTION=true
+"""
+import datetime
+import json
+import os
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import requests
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
+
+from acme import challenges, client, crypto_util, messages
+from acme.client import ClientV2
+from josepy import JWKRSA, ComparableRSAKey
+import josepy
+
+from app.config import settings
+from app.persistence import repos
+from app.persistence.models import ManagedBy
+
+
+# Let's Encrypt directory URLs
+LE_PRODUCTION_URL = "https://acme-v02.api.letsencrypt.org/directory"
+LE_STAGING_URL = "https://acme-staging-v02.api.letsencrypt.org/directory"
+
+
+@dataclass
+class CertificateInfo:
+    """Information about a certificate on disk."""
+    domain: str
+    cert_path: Path
+    key_path: Path
+    expires: datetime.datetime
+    issuer: str
+    
+    @property
+    def days_until_expiry(self) -> int:
+        """Calculate days until certificate expires."""
+        delta = self.expires - datetime.datetime.now(datetime.timezone.utc)
+        return max(0, delta.days)
+    
+    @property
+    def is_expired(self) -> bool:
+        """Check if certificate has expired."""
+        return datetime.datetime.now(datetime.timezone.utc) >= self.expires
+    
+    @property
+    def needs_renewal(self) -> bool:
+        """Check if certificate needs renewal based on configured threshold."""
+        return self.days_until_expiry <= settings.LE_RENEW_SOON
+
+
+class LetsEncryptManager:
+    """
+    Manages SSL certificates from Let's Encrypt using ACME protocol.
+    Handles certificate creation, renewal, and validation.
+    """
+
+    def __init__(self, db: requests.Session, dry_run: bool = False):
+        self.db = db
+        self.dry_run = dry_run
+        self.acme_client: Optional[ClientV2] = None
+        self._ensure_directories()
+
+    def _ensure_directories(self):
+        """Create necessary directories for certificate storage and ACME challenges."""
+        Path(settings.LE_SSL_DIR).mkdir(parents=True, exist_ok=True)
+        Path(settings.LE_ACME_DIR).mkdir(parents=True, exist_ok=True)
+        Path(settings.LE_SSL_DIR, "account").mkdir(parents=True, exist_ok=True)
+
+    def _get_acme_client(self) -> ClientV2:
+        """
+        Get or create ACME client with account registration.
+        Registers new account if needed or uses existing account key.
+        """
+        if self.acme_client:
+            return self.acme_client
+
+        # Account key path
+        account_key_path = Path(settings.LE_SSL_DIR, "account", "account.key")
+        
+        # Load or generate account key
+        if account_key_path.exists():
+            with open(account_key_path, 'rb') as f:
+                account_key = serialization.load_pem_private_key(
+                    f.read(),
+                    password=None,
+                    backend=default_backend()
+                )
+        else:
+            # Generate new RSA key for account
+            account_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+                backend=default_backend()
+            )
+            # Save account key
+            pem = account_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            with open(account_key_path, 'wb') as f:
+                f.write(pem)
+            os.chmod(account_key_path, 0o600)
+
+        # Create JWK from account key
+        jwk = JWKRSA(key=ComparableRSAKey(account_key))
+
+        # Choose directory URL based on production flag
+        directory_url = LE_PRODUCTION_URL if settings.LE_PRODUCTION else LE_STAGING_URL
+        
+        # Create ACME client network
+        net = client.ClientNetwork(jwk, user_agent='python-nginx-dashboard/1.0')
+        directory = messages.Directory.from_json(net.get(directory_url).json())
+        self.acme_client = ClientV2(directory, net=net)
+
+        # Register account if needed
+        if not self._is_account_registered():
+            if not settings.LE_EMAIL:
+                raise ValueError("LE_EMAIL must be set for Let's Encrypt account registration")
+            
+            registration = messages.NewRegistration.from_data(
+                email=settings.LE_EMAIL,
+                terms_of_service_agreed=True
+            )
+            try:
+                self.acme_client.new_account(registration)
+                print(f"[Let's Encrypt] Registered new account with email: {settings.LE_EMAIL}")
+            except Exception as e:
+                print(f"[Let's Encrypt] Account registration error (may already exist): {e}")
+
+        return self.acme_client
+
+    def _is_account_registered(self) -> bool:
+        """Check if account is already registered."""
+        account_key_path = Path(settings.LE_SSL_DIR, "account", "account.key")
+        account_reg_path = Path(settings.LE_SSL_DIR, "account", "registration.json")
+        return account_key_path.exists() and account_reg_path.exists()
+
+    def sync(self):
+        """
+        Synchronize certificates for all managed domains.
+        Creates new certificates or renews expiring ones.
+        """
+        if not settings.LE_EMAIL:
+            print("[Let's Encrypt] LE_EMAIL not configured, skipping certificate sync")
+            return
+
+        domains = self._get_domains_to_manage()
+        print(f"[Let's Encrypt] Managing certificates for {len(domains)} domains")
+        
+        for domain_name, subdomains in domains.items():
+            self._sync_domain(domain_name, subdomains)
+
+    def _get_domains_to_manage(self) -> dict[str, set[str]]:
+        """
+        Get domains and subdomains that need Let's Encrypt certificates.
+        Groups subdomains by their parent domain.
+        """
+        domains = repos.DomainRepo(self.db).list_all()
+        domain_subdomains: dict[str, set[str]] = {}
+
+        for domain in domains:
+            routes = repos.NginxRouteRepo(self.db).list_by_domain(domain.id)
+            active_routes = [r for r in routes if r.active]
+            
+            if not active_routes:
+                continue
+
+            domain_subdomains[domain.name] = set()
+            
+            for route in active_routes:
+                subdomain = route.subdomain
+                # Handle root domain
+                if subdomain in ("@", ""):
+                    domain_subdomains[domain.name].add(domain.name)
+                # Handle wildcard subdomains - Let's Encrypt doesn't support multi-level wildcards
+                elif "*" in subdomain:
+                    # For wildcard, we'll create a wildcard cert
+                    domain_subdomains[domain.name].add(f"*.{domain.name}")
+                # Handle regular subdomains
+                else:
+                    fqdn = f"{subdomain}.{domain.name}"
+                    domain_subdomains[domain.name].add(fqdn)
+
+        return domain_subdomains
+
+    def _sync_domain(self, domain_name: str, subdomains: set[str]):
+        """
+        Synchronize certificates for a specific domain and its subdomains.
+        Groups subdomains into appropriate certificate combinations.
+        """
+        print(f"[Let's Encrypt] Processing domain: {domain_name}")
+        
+        # Group subdomains: root+wildcard together, others separately
+        root_and_wildcard = set()
+        other_subdomains = set()
+        
+        for subdomain in subdomains:
+            if subdomain == domain_name or subdomain == f"*.{domain_name}":
+                root_and_wildcard.add(subdomain)
+            else:
+                other_subdomains.add(subdomain)
+        
+        # Process root + wildcard certificate
+        if root_and_wildcard:
+            cert_domains = sorted(root_and_wildcard)
+            self._process_certificate(domain_name, cert_domains)
+        
+        # Process other subdomains individually or in small groups
+        for subdomain in sorted(other_subdomains):
+            self._process_certificate(subdomain, [subdomain])
+
+    def _process_certificate(self, primary_domain: str, domains: list[str]):
+        """
+        Process a certificate for given domains.
+        Checks validity and renews if necessary.
+        """
+        # Sanitize primary domain for file naming (remove wildcards and special chars)
+        safe_name = primary_domain.replace("*.", "wildcard.").replace("*", "wildcard")
+        
+        cert_info = self._get_certificate_info(safe_name)
+        
+        # Check if certificate exists and is valid
+        if cert_info and not cert_info.needs_renewal:
+            print(f"  ✓ {primary_domain}: valid until {cert_info.expires.strftime('%Y-%m-%d')} "
+                  f"({cert_info.days_until_expiry} days)")
+            return
+        
+        if cert_info and cert_info.needs_renewal:
+            print(f"  ⟳ {primary_domain}: expires in {cert_info.days_until_expiry} days, renewing...")
+        else:
+            print(f"  + {primary_domain}: no valid certificate, creating...")
+        
+        # Create or renew certificate
+        self._create_certificate(safe_name, domains)
+
+    def _get_certificate_info(self, safe_name: str) -> Optional[CertificateInfo]:
+        """
+        Get information about an existing certificate.
+        Returns None if certificate doesn't exist or is invalid.
+        """
+        cert_dir = Path(settings.LE_SSL_DIR, safe_name)
+        cert_path = cert_dir / "fullchain.pem"
+        key_path = cert_dir / "privkey.pem"
+        
+        if not cert_path.exists() or not key_path.exists():
+            return None
+        
+        try:
+            with open(cert_path, 'rb') as f:
+                cert_data = f.read()
+                cert = x509.load_pem_x509_certificate(cert_data, default_backend())
+            
+            # Extract expiration date
+            expires = cert.not_valid_after_utc
+            
+            # Extract issuer
+            issuer = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+            
+            return CertificateInfo(
+                domain=safe_name,
+                cert_path=cert_path,
+                key_path=key_path,
+                expires=expires,
+                issuer=issuer
+            )
+        except Exception as e:
+            print(f"  ! Error reading certificate for {safe_name}: {e}")
+            return None
+
+    def _create_certificate(self, safe_name: str, domains: list[str]):
+        """
+        Create or renew a certificate for the given domains using ACME protocol.
+        """
+        if self.dry_run:
+            print(f"  [DRY RUN] Would create certificate for: {', '.join(domains)}")
+            return
+        
+        try:
+            # Generate private key
+            cert_dir = Path(settings.LE_SSL_DIR, safe_name)
+            cert_dir.mkdir(parents=True, exist_ok=True)
+            key_path = cert_dir / "privkey.pem"
+            
+            # Generate or load existing private key
+            if key_path.exists():
+                with open(key_path, 'rb') as f:
+                    private_key = serialization.load_pem_private_key(
+                        f.read(),
+                        password=None,
+                        backend=default_backend()
+                    )
+            else:
+                private_key = rsa.generate_private_key(
+                    public_exponent=65537,
+                    key_size=2048,
+                    backend=default_backend()
+                )
+                # Save private key
+                pem = private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
+                with open(key_path, 'wb') as f:
+                    f.write(pem)
+                os.chmod(key_path, 0o600)
+            
+            # Generate CSR
+            csr = x509.CertificateSigningRequestBuilder()
+            csr = csr.subject_name(x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, domains[0]),
+            ]))
+            
+            # Add all domains as SANs
+            san_list = [x509.DNSName(domain) for domain in domains]
+            csr = csr.add_extension(
+                x509.SubjectAlternativeName(san_list),
+                critical=False,
+            )
+            
+            csr = csr.sign(private_key, hashes.SHA256(), default_backend())
+            csr_pem = csr.public_bytes(serialization.Encoding.PEM)
+            
+            # Request certificate from Let's Encrypt
+            client = self._get_acme_client()
+            
+            # Create order for domains
+            order = client.new_order(csr_pem)
+            
+            # Complete challenges for all authorizations
+            for authz in order.authorizations:
+                self._complete_http_challenge(client, authz)
+            
+            # Finalize order
+            order = client.poll_and_finalize(order)
+            
+            # Download certificate
+            cert_pem = order.fullchain_pem
+            
+            # Save certificate
+            cert_path = cert_dir / "fullchain.pem"
+            with open(cert_path, 'wb') as f:
+                f.write(cert_pem.encode())
+            os.chmod(cert_path, 0o644)
+            
+            print(f"  ✓ Certificate created successfully for: {', '.join(domains)}")
+            
+        except Exception as e:
+            print(f"  ✗ Error creating certificate for {safe_name}: {e}")
+            raise
+
+    def _complete_http_challenge(self, client: ClientV2, authz):
+        """
+        Complete HTTP-01 challenge for domain authorization.
+        Creates challenge file in ACME directory for nginx to serve.
+        """
+        # Find HTTP-01 challenge
+        http_challenge = None
+        for challenge in authz.body.challenges:
+            if isinstance(challenge.chall, challenges.HTTP01):
+                http_challenge = challenge
+                break
+        
+        if not http_challenge:
+            raise ValueError(f"No HTTP-01 challenge found for {authz.body.identifier.value}")
+        
+        # Get challenge token and response
+        response, validation = http_challenge.response_and_validation(client.net.key)
+        
+        # Create challenge file
+        challenge_dir = Path(settings.LE_ACME_DIR)
+        challenge_dir.mkdir(parents=True, exist_ok=True)
+        
+        challenge_file = challenge_dir / http_challenge.chall.encode("token")
+        with open(challenge_file, 'w') as f:
+            f.write(validation)
+        os.chmod(challenge_file, 0o644)
+        
+        print(f"    Challenge file created: {challenge_file.name}")
+        
+        # Notify Let's Encrypt that challenge is ready
+        client.answer_challenge(http_challenge, response)
+        
+        # Wait for challenge validation
+        try:
+            # Poll for authorization status
+            authz_resource = client.poll(authz)
+            if authz_resource.body.status != messages.STATUS_VALID:
+                raise ValueError(f"Authorization failed for {authz.body.identifier.value}")
+            print(f"    ✓ Challenge validated for {authz.body.identifier.value}")
+        finally:
+            # Clean up challenge file
+            if challenge_file.exists():
+                challenge_file.unlink()
+
+    def get_certificate_path(self, domain_name: str, subdomain: str) -> tuple[str, str]:
+        """
+        Get the certificate and key paths for a given domain and subdomain.
+        Returns (cert_path, key_path).
+        """
+        # Determine the certificate directory name based on subdomain
+        if subdomain in ("@", ""):
+            safe_name = domain_name
+        elif subdomain.startswith("*."):
+            safe_name = f"wildcard.{domain_name}"
+        elif "*" in subdomain:
+            safe_name = subdomain.replace("*.", "wildcard.").replace("*", "wildcard")
+        else:
+            safe_name = f"{subdomain}.{domain_name}"
+        
+        cert_dir = Path(settings.LE_SSL_DIR, safe_name)
+        cert_path = cert_dir / "fullchain.pem"
+        key_path = cert_dir / "privkey.pem"
+        
+        return str(cert_path), str(key_path)
+
+    def list_certificates(self) -> list[CertificateInfo]:
+        """
+        List all managed certificates with their status.
+        Returns list of CertificateInfo objects.
+        """
+        certificates = []
+        ssl_dir = Path(settings.LE_SSL_DIR)
+        
+        if not ssl_dir.exists():
+            return certificates
+        
+        for cert_dir in ssl_dir.iterdir():
+            if not cert_dir.is_dir() or cert_dir.name == "account":
+                continue
+            
+            cert_info = self._get_certificate_info(cert_dir.name)
+            if cert_info:
+                certificates.append(cert_info)
+        
+        return sorted(certificates, key=lambda c: c.expires)
+
+    def revoke_certificate(self, safe_name: str):
+        """
+        Revoke a certificate at Let's Encrypt and remove it from disk.
+        """
+        cert_info = self._get_certificate_info(safe_name)
+        if not cert_info:
+            print(f"[Let's Encrypt] Certificate not found: {safe_name}")
+            return
+        
+        if self.dry_run:
+            print(f"[DRY RUN] Would revoke certificate: {safe_name}")
+            return
+        
+        try:
+            # Load certificate
+            with open(cert_info.cert_path, 'rb') as f:
+                cert_pem = f.read()
+            
+            # Revoke via ACME
+            client = self._get_acme_client()
+            cert_obj = josepy.ComparableX509(
+                x509.load_pem_x509_certificate(cert_pem, default_backend())
+            )
+            client.revoke(cert_obj, 0)  # 0 = unspecified reason
+            
+            # Remove certificate files
+            cert_info.cert_path.unlink()
+            cert_info.key_path.unlink()
+            cert_info.cert_path.parent.rmdir()
+            
+            print(f"[Let's Encrypt] Certificate revoked and removed: {safe_name}")
+        except Exception as e:
+            print(f"[Let's Encrypt] Error revoking certificate {safe_name}: {e}")

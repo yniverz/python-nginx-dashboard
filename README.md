@@ -85,6 +85,14 @@ CF_CERT_DAYS=5475                  # validity (days); default ~15 years
 CF_RENEW_SOON=30                   # renew if < N days to expiry
 CF_SSL_DIR="/etc/nginx/ssl"        # where certs/keys are written
 
+# Let's Encrypt integration (alternative to Cloudflare Origin CA)
+ENABLE_LETSENCRYPT=false           # set true to use Let's Encrypt for SSL
+LE_EMAIL=""                        # Email for Let's Encrypt account (required)
+LE_PRODUCTION=false                # Use staging server for testing; switch to true for production
+LE_SSL_DIR="/etc/nginx/ssl-le"     # Directory for Let's Encrypt certificates
+LE_ACME_DIR="/var/www/challenges"  # Directory for ACME challenge files
+LE_RENEW_SOON=30                   # Renew certificates X days before expiry
+
 # Networking
 LOCAL_IP="127.0.0.1"               # used for auto FRP origin connections
 
@@ -103,6 +111,67 @@ DEBUG_MODE=true
 
 * **Zone.DNS**: Edit
 * **Zone.SSL and Certificates**: Edit
+
+---
+
+## Let's Encrypt SSL (Alternative to Cloudflare Origin CA)
+
+The application now supports **Let's Encrypt** for obtaining valid SSL certificates using the ACME protocol. This is an alternative to Cloudflare Origin CA certificates and provides publicly trusted certificates.
+
+### Configuration
+
+Add these settings to your `.env` file:
+
+```ini
+# Let's Encrypt Configuration
+ENABLE_LETSENCRYPT=true                    # Enable Let's Encrypt SSL management
+LE_EMAIL=your-email@example.com            # Required: Email for Let's Encrypt account
+LE_PRODUCTION=false                        # Use staging server for testing (recommended initially)
+LE_SSL_DIR=/etc/nginx/ssl-le               # Directory for Let's Encrypt certificates
+LE_ACME_DIR=/var/www/challenges            # Directory for ACME challenge files
+LE_RENEW_SOON=30                           # Renew certificates X days before expiry
+```
+
+### Setup Instructions
+
+1. **Create required directories:**
+   ```bash
+   sudo mkdir -p /var/www/challenges /etc/nginx/ssl-le
+   sudo chown -R $USER:$USER /var/www/challenges /etc/nginx/ssl-le
+   ```
+
+2. **Ensure DNS records are configured:**
+   - Your domains must point to your server's public IP address
+   - Port 80 must be accessible from the internet for HTTP-01 challenge validation
+
+3. **Start with staging server:**
+   - Set `LE_PRODUCTION=false` initially to test with Let's Encrypt staging server
+   - Staging certificates won't be trusted by browsers but won't hit rate limits
+   - Once verified working, switch to `LE_PRODUCTION=true`
+
+4. **Run the publish job:**
+   - The application will automatically request and renew certificates
+   - Nginx configuration includes ACME challenge locations at `/.well-known/acme-challenge/`
+
+### Important Notes
+
+- **Rate Limits (Production):**
+  - 50 certificates per registered domain per week
+  - 5 duplicate certificates per week
+  - See: https://letsencrypt.org/docs/rate-limits/
+
+- **Port 80 Requirement:**
+  - HTTP-01 challenge validation requires port 80 to be accessible
+  - Nginx automatically serves challenge files from `LE_ACME_DIR`
+
+- **Certificate Renewal:**
+  - Certificates are automatically renewed when they have less than `LE_RENEW_SOON` days remaining
+  - Default is 30 days before expiry
+
+- **Mixing SSL Providers:**
+  - You can use either Cloudflare Origin CA OR Let's Encrypt (not both simultaneously)
+  - Set `ENABLE_CLOUDFLARE=true` for Origin CA or `ENABLE_LETSENCRYPT=true` for Let's Encrypt
+  - If both are enabled, Let's Encrypt takes precedence for certificate paths in Nginx config
 
 ---
 
@@ -190,6 +259,12 @@ ENABLE_CLOUDFLARE=false
 CLOUDFLARE_API_TOKEN=
 CF_ORIGIN_CA_KEY=
 CF_SSL_DIR=/etc/nginx/ssl
+ENABLE_LETSENCRYPT=false
+LE_EMAIL=
+LE_PRODUCTION=false
+LE_SSL_DIR=/etc/nginx/ssl-le
+LE_ACME_DIR=/var/www/challenges
 NGINX_HTTP_CONF_PATH=/etc/nginx/conf.d/edge_http.conf
+NGINX_STREAM_CONF_PATH=/etc/nginx/stream.d/edge_stream.conf
 NGINX_RELOAD_CMD="nginx -s reload"
 ```

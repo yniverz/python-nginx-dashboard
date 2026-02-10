@@ -12,6 +12,7 @@ from app.persistence import repos
 from app.persistence.db import DBSession
 from app.persistence.models import DnsRecord, GatewayConnection, GatewayProtocol, ManagedBy
 from app.services.cloudflare import CloudFlareManager, CloudFlareOriginCAManager
+from app.services.letsencrypt import LetsEncryptManager
 from app.services.nginx import NginxConfigGenerator
 
 # Global state for background job management
@@ -63,10 +64,15 @@ def background_publish():
             cf_dns = CloudFlareManager(db, dry_run=not settings.ENABLE_CLOUDFLARE)
             cache = cf_dns.sync()
 
-            # Manage SSL certificates
-            print(f"[background_publish] Managing SSL certificates (dry_run: {not settings.ENABLE_CLOUDFLARE})")
+            # Manage SSL certificates from Cloudflare Origin CA
+            print(f"[background_publish] Managing Cloudflare Origin CA certificates (dry_run: {not settings.ENABLE_CLOUDFLARE})")
             cf_ca = CloudFlareOriginCAManager(db, cache, dry_run=not settings.ENABLE_CLOUDFLARE)
             cf_ca.sync()
+
+            # Manage Let's Encrypt SSL certificates
+            print(f"[background_publish] Managing Let's Encrypt certificates (dry_run: {not settings.ENABLE_LETSENCRYPT})")
+            le_mgr = LetsEncryptManager(db, dry_run=not settings.ENABLE_LETSENCRYPT)
+            le_mgr.sync()
 
         # Reload nginx configuration if enabled
         if settings.ENABLE_NGINX:

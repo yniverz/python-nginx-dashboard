@@ -105,7 +105,17 @@ map $http_upgrade $connection_upgrade {{
 server {{
     listen 80;
     server_name {domain.name} *.{domain.name};
-    return 301 https://$host$request_uri;
+    
+    # ACME challenge location for Let's Encrypt
+    location /.well-known/acme-challenge/ {{
+        alias {settings.LE_ACME_DIR}/;
+        try_files $uri =404;
+    }}
+    
+    # Redirect all other traffic to HTTPS
+    location / {{
+        return 301 https://$host$request_uri;
+    }}
 }}
 """
             
@@ -139,16 +149,31 @@ server {{
             if len(path_blocks.strip()) == 0:
                 continue
 
-            # Determine SSL certificate path based on subdomain structure
-            if subdomain in ("@", "") or "." not in subdomain:
-                label_key = ""
+            # Determine SSL certificate path based on subdomain structure and SSL provider
+            if settings.ENABLE_LETSENCRYPT:
+                # Use Let's Encrypt certificates
+                if subdomain in ("@", ""):
+                    safe_name = domain.name
+                elif subdomain.startswith("*."):
+                    safe_name = f"wildcard.{domain.name}"
+                elif "*" in subdomain:
+                    safe_name = subdomain.replace("*.", "wildcard.").replace("*", "wildcard")
+                else:
+                    safe_name = f"{subdomain}.{domain.name}"
+                
+                crt_path = f"{settings.LE_SSL_DIR}/{safe_name}/fullchain.pem"
+                key_path = f"{settings.LE_SSL_DIR}/{safe_name}/privkey.pem"
             else:
-                # For multi-level subdomains, use the parent domain for wildcard cert
-                label_key = ".".join(subdomain.split(".")[1:]) + "."
+                # Use Cloudflare Origin CA certificates (default)
+                if subdomain in ("@", "") or "." not in subdomain:
+                    label_key = ""
+                else:
+                    # For multi-level subdomains, use the parent domain for wildcard cert
+                    label_key = ".".join(subdomain.split(".")[1:]) + "."
 
-            dir_name = f"{label_key}{domain.name}"
-            crt_path = f"/etc/nginx/ssl/{dir_name}/fullchain.pem"
-            key_path = f"/etc/nginx/ssl/{dir_name}/privkey.pem"
+                dir_name = f"{label_key}{domain.name}"
+                crt_path = f"{settings.CF_SSL_DIR}/{dir_name}/fullchain.pem"
+                key_path = f"{settings.CF_SSL_DIR}/{dir_name}/privkey.pem"
 
             # Generate HTTPS server block with SSL and proxy configuration
             subdomain_blocks += f"""
@@ -160,6 +185,12 @@ server {{
     ssl_certificate_key {key_path};
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # ACME challenge location for Let's Encrypt certificate renewal
+    location /.well-known/acme-challenge/ {{
+        alias {settings.LE_ACME_DIR}/;
+        try_files $uri =404;
+    }}
 
     location /robots.txt {{
         default_type text/plain;

@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     # Cloudflare client instance (initialized in post_init)
     CF: cloudflare.Cloudflare | None = None
 
+    # Let's Encrypt SSL settings
+    LE_EMAIL: str = ""  # Email for Let's Encrypt account registration
+    LE_SSL_DIR: str = "/etc/nginx/ssl-le"  # Directory for Let's Encrypt certificates
+    LE_ACME_DIR: str = "/var/www/challenges"  # Directory for ACME challenge files
+    LE_RENEW_SOON: int = 30  # Renew certificates when <30 days to expiry
+    LE_PRODUCTION: bool = False  # Use Let's Encrypt production server (vs staging)
+
     # Network settings
     LOCAL_IP: str = "localhost"
 
@@ -47,6 +54,7 @@ class Settings(BaseSettings):
     DEBUG_MODE: bool = True
     ENABLE_NGINX: bool = False  # Enable nginx configuration generation
     ENABLE_CLOUDFLARE: bool = False  # Enable Cloudflare DNS/SSL management
+    ENABLE_LETSENCRYPT: bool = False  # Enable Let's Encrypt SSL management
     USE_SSL: bool = False  # Enable HTTPS using self-signed certificates
 
     def model_post_init(self, __context):
