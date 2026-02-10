@@ -181,6 +181,8 @@ class CloudFlareManager:
         - Creates missing local records on Cloudflare
         - Removes archived records from Cloudflare
         """
+
+        print("####__", repos.DnsRecordRepo(self.db).list_archived())
         # Load local records (excluding previously imported ones)
         self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
         self.cf_cache.local_archived.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_archived() if e.managed_by != ManagedBy.IMPORTED])
