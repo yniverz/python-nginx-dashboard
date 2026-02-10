@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Let's Encrypt SSL settings
     LE_EMAIL: str = ""  # Email for Let's Encrypt account registration
-    LE_SSL_DIR: str = "/etc/nginx/ssl-le"  # Directory for Let's Encrypt certificates
+    LE_SSL_DIR: str = "/etc/letsencrypt"  # Certbot configuration directory
     LE_ACME_DIR: str = "/var/www/challenges"  # Directory for ACME challenge files
     LE_RENEW_SOON: int = 30  # Renew certificates when <30 days to expiry
     LE_PRODUCTION: bool = False  # Use Let's Encrypt production server (vs staging)

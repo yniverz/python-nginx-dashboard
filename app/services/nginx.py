@@ -151,18 +151,12 @@ server {{
 
             # Determine SSL certificate path based on subdomain structure and SSL provider
             if settings.ENABLE_LETSENCRYPT:
-                # Use Let's Encrypt certificates
-                if subdomain in ("@", ""):
-                    safe_name = domain.name
-                elif subdomain.startswith("*."):
-                    safe_name = f"wildcard.{domain.name}"
-                elif "*" in subdomain:
-                    safe_name = subdomain.replace("*.", "wildcard.").replace("*", "wildcard")
-                else:
-                    safe_name = f"{subdomain}.{domain.name}"
+                # Use Let's Encrypt certificates (certbot stores them in live/ subdirectory)
+                # Certbot uses the primary domain name as the cert directory
+                cert_name = domain.name
                 
-                crt_path = f"{settings.LE_SSL_DIR}/{safe_name}/fullchain.pem"
-                key_path = f"{settings.LE_SSL_DIR}/{safe_name}/privkey.pem"
+                crt_path = f"{settings.LE_SSL_DIR}/live/{cert_name}/fullchain.pem"
+                key_path = f"{settings.LE_SSL_DIR}/live/{cert_name}/privkey.pem"
             else:
                 # Use Cloudflare Origin CA certificates (default)
                 if subdomain in ("@", "") or "." not in subdomain:

@@ -19,7 +19,5 @@ SQLAlchemy>=2.0,<3.0
 cloudflare>=4.3,<5.0
 requests>=2.31,<3.0
 
-# Let's Encrypt / ACME protocol
-acme>=2.7,<3.0
+# Let's Encrypt / Certificate handling
 cryptography>=41.0,<43.0
-josepy>=1.14,<2.0
