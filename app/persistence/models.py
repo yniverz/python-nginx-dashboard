@@ -58,9 +58,6 @@ class DnsRecordArchive(Base):
     proxied: Mapped[bool | None] = mapped_column(Boolean)
     managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy))
 
-    # No unique constraint here to allow multiple historical entries
-    domain: Mapped["Domain"] = relationship(foreign_keys=[domain_id], lazy="joined")
-
     @classmethod
     def from_dns_record(cls, rec: "DnsRecord") -> "DnsRecordArchive":
         """Create an archive record from an existing DNS record."""

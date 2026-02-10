@@ -184,7 +184,7 @@ class CloudFlareManager:
 
         print("##### Local records before sync:")
         for e in repos.DnsRecordRepo(self.db).list_archived():
-            print("     ", e.domain_id, e.domain.name, e.name, e.type, e.content, e.proxied, e.managed_by)
+            print("     ", e.domain_id, e.name, e.type, e.content, e.proxied, e.managed_by)
 
         # Load local records (excluding previously imported ones)
         self.cf_cache.local_entries.update([self._get_shared_record_from_db(e) for e in repos.DnsRecordRepo(self.db).list_all() if e.managed_by != ManagedBy.IMPORTED])
@@ -240,7 +240,7 @@ class CloudFlareManager:
         # go through archived records and see if they still exist, if yes, delete first.
         print("##### Listing archived")
         for e in repos.DnsRecordRepo(self.db).list_archived():
-            print("    ", e.domain.name, e.name, e.type, e.content, e.proxied, e.managed_by)
+            print("    ", e.domain_id, e.name, e.type, e.content, e.proxied, e.managed_by)
         for entry in repos.DnsRecordRepo(self.db).list_archived():
             print("remove ", entry.name)
             shared_rec = self._get_shared_record_from_db(entry)
