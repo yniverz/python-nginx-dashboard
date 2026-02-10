@@ -77,8 +77,6 @@ def ensure_schema() -> None:
     """
     Base.metadata.create_all(bind=engine)
 
-    return
-
     with engine.begin() as conn:
         inspector = inspect(conn)
         if "domains" not in inspector.get_table_names():
@@ -91,6 +89,12 @@ def ensure_schema() -> None:
         
         # Migration: Update dns_records unique constraint to include proxied field
         _migrate_dns_records_constraint(conn, inspector)
+        
+        # Migration: Add proxied column to dns_records_archive table if missing
+        if "dns_records_archive" in inspector.get_table_names():
+            archive_columns = {col["name"] for col in inspector.get_columns("dns_records_archive")}
+            if "proxied" not in archive_columns:
+                conn.execute(text("ALTER TABLE dns_records_archive ADD COLUMN proxied BOOLEAN"))
 
 
 class DBSession:

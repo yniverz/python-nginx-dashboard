@@ -226,7 +226,8 @@ class DnsRecordRepo:
         archive = self.db.scalar(select(DnsRecordArchive).where(
             DnsRecordArchive.name==rec.name,
             DnsRecordArchive.type==rec.type,
-            DnsRecordArchive.content==rec.content
+            DnsRecordArchive.content==rec.content,
+            DnsRecordArchive.proxied==rec.proxied
         ))
         if archive:
             self.db.delete(archive)

@@ -55,6 +55,7 @@ class DnsRecordArchive(Base):
     name: Mapped[str] = mapped_column(String(255))
     type: Mapped[DnsType] = mapped_column(Enum(DnsType))
     content: Mapped[str] = mapped_column(String(1024))
+    proxied: Mapped[bool | None] = mapped_column(Boolean)
     managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy))
 
     # No unique constraint here to allow multiple historical entries
@@ -68,6 +69,7 @@ class DnsRecordArchive(Base):
             name=rec.name,
             type=rec.type,
             content=rec.content,
+            proxied=rec.proxied,
             managed_by=rec.managed_by,
         )
 
