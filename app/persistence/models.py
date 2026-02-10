@@ -59,7 +59,7 @@ class DnsRecordArchive(Base):
     managed_by: Mapped[ManagedBy] = mapped_column(Enum(ManagedBy))
 
     # No unique constraint here to allow multiple historical entries
-    domain: Mapped["Domain"] = relationship(lazy="joined")
+    domain: Mapped["Domain"] = relationship(foreign_keys=[domain_id], lazy="joined")
 
     @classmethod
     def from_dns_record(cls, rec: "DnsRecord") -> "DnsRecordArchive":
